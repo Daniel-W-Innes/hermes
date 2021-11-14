@@ -11,55 +11,55 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    
-    - uses: finnp/create-file-action@master
-      env:
-        FILE_NAME: secrets/db_user.txt
-        FILE_DATA: ${{ secrets.DB_USER }}
-        
-    - uses: finnp/create-file-action@master
-      env:
-        FILE_NAME: secrets/db_password.txt
-        FILE_DATA: ${{ secrets.DB_PASSWORD }}
-      
-    - uses: finnp/create-file-action@master
-      env:
-        FILE_NAME: secrets/jwt_private_key.pem
-        FILE_DATA: ${{ secrets.JWT_PRIVATE_KEY }}
-        
-    - uses: finnp/create-file-action@master
-      env:
-        FILE_NAME: secrets/jwt_public_key.pem
-        FILE_DATA: ${{ secrets.JWT_PUBLIC_KEY }}
-        
-    - uses: finnp/create-file-action@master
-      env:
-        FILE_NAME: secrets/pepper_key.txt
-        FILE_DATA: ${{ secrets.PEPPER_KEY }}
-      
-    - name: Build the docker-compose stack
-      run: docker-compose up -d database
+      - uses: actions/checkout@v2
 
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.17
+      - uses: finnp/create-file-action@master
+        env:
+          FILE_NAME: secrets/db_user.txt
+          FILE_DATA: ${{ secrets.DB_USER }}
 
-    - name: Build
-      run: go build -v ./...
+      - uses: finnp/create-file-action@master
+        env:
+          FILE_NAME: secrets/db_password.txt
+          FILE_DATA: ${{ secrets.DB_PASSWORD }}
 
-    - name: Test
-      run: go test -v ./...
-      env:
-        DB_HOST: database
-        DB_PORT: 5432
-        DB_USER: ${{ secrets.DB_USER }}
-        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        DB_NAME: hermes
-        MAX_OPEN_CONNS: 5
-        MAX_IDLE_CONNS: 2
-        JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
-        JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
-        BCRYPT_COST: 15
-        PEPPER_KEY_FILE: ${{ secrets.PEPPER_KEY }}
+      - uses: finnp/create-file-action@master
+        env:
+          FILE_NAME: secrets/jwt_private_key.pem
+          FILE_DATA: ${{ secrets.JWT_PRIVATE_KEY }}
+
+      - uses: finnp/create-file-action@master
+        env:
+          FILE_NAME: secrets/jwt_public_key.pem
+          FILE_DATA: ${{ secrets.JWT_PUBLIC_KEY }}
+
+      - uses: finnp/create-file-action@master
+        env:
+          FILE_NAME: secrets/pepper_key.txt
+          FILE_DATA: ${{ secrets.PEPPER_KEY }}
+
+      - name: Build the docker-compose stack
+        run: docker-compose up -d database
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v ./...
+        env:
+          DB_HOST: database
+          DB_PORT: 5432
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: hermes
+          MAX_OPEN_CONNS: 5
+          MAX_IDLE_CONNS: 2
+          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
+          BCRYPT_COST: 15
+          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}

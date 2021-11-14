@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/Daniel-W-Innes/messenger/routes"
-	"github.com/Daniel-W-Innes/messenger/utils"
+	"github.com/Daniel-W-Innes/hermes/routes"
+	"github.com/Daniel-W-Innes/hermes/utils"
 	"github.com/gofiber/fiber/v2"
 	"log"
 )

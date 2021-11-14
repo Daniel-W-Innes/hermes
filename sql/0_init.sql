@@ -1,1 +1,1 @@
-CREATE DATABASE messenger;
+CREATE DATABASE hermes;

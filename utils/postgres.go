@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/Daniel-W-Innes/messenger/models"
+	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )

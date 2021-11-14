@@ -3,8 +3,8 @@ package routes
 import (
 	"database/sql"
 	"errors"
-	"github.com/Daniel-W-Innes/messenger/models"
-	"github.com/Daniel-W-Innes/messenger/utils"
+	"github.com/Daniel-W-Innes/hermes/models"
+	"github.com/Daniel-W-Innes/hermes/utils"
 	"github.com/gofiber/fiber/v2"
 	"log"
 )

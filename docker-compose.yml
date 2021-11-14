@@ -43,7 +43,7 @@ services:
       DB_PORT: 5432
       DB_USER_FILE: /run/secrets/db_user
       DB_PASSWORD_FILE: /run/secrets/db_password
-      DB_NAME: messenger
+      DB_NAME: hermes
       MAX_OPEN_CONNS: 5
       MAX_IDLE_CONNS: 2
       JWT_PRIVATE_KEY_FILE: /run/secrets/jwt_private_key

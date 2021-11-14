@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"github.com/Daniel-W-Innes/messenger/models"
+	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"log"

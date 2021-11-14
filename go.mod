@@ -1,4 +1,4 @@
-module github.com/Daniel-W-Innes/messenger
+module github.com/Daniel-W-Innes/hermes
 
 go 1.17
 

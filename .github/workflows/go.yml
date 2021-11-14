@@ -31,14 +31,12 @@ jobs:
     - uses: finnp/create-file-action@master
       env:
         FILE_NAME: secrets/jwt_public_key
-        FILE_DATA: test
+        FILE_DATA: ${{ secrets.JWT_PUBLIC_KEY }}
         
     - uses: finnp/create-file-action@master
       env:
         FILE_NAME: secrets/pepper_key.txt
         FILE_DATA: ${{ secrets.PEPPER_KEY }}
-    
-    
-    - name: Test pem
+        
+    - name: Test printing your secret (Remove this step in production)
       run: cat secrets/jwt_public_key
-

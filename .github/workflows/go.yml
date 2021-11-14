@@ -52,7 +52,7 @@ jobs:
       - name: Test
         run: go test -v ./...
         env:
-          DB_HOST: database
+          DB_HOST: localhost
           DB_PORT: 5432
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}

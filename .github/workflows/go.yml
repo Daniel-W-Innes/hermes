@@ -46,6 +46,9 @@ jobs:
       with:
         go-version: 1.17
 
+    - name: Test pem
+      run: cat secrets/jwt_public_key.pem
+
     - name: Build
       run: go build -v ./...
 

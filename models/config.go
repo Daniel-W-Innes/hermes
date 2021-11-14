@@ -1,0 +1,177 @@
+package models
+
+import (
+	"crypto/ecdsa"
+	"fmt"
+	"github.com/golang-jwt/jwt/v4"
+	"io/ioutil"
+	"log"
+	"os"
+	"strconv"
+	"sync"
+)
+
+var lock = &sync.Mutex{}
+
+type Config struct {
+	DBConfig       *DBConfig
+	JWTConfig      *JWTConfig
+	PasswordConfig *PasswordConfig
+}
+
+var config *Config
+
+func GetConfig() (*Config, error) {
+	if config == nil {
+		lock.Lock()
+		defer lock.Unlock()
+		if config == nil {
+			var dbConfig DBConfig
+			err := dbConfig.getConfigFromENV()
+			if err != nil {
+				return &Config{}, err
+			}
+
+			var jwtConfig JWTConfig
+			err = jwtConfig.getConfigFromENV()
+			if err != nil {
+				return &Config{}, err
+			}
+
+			var passwordConfig PasswordConfig
+			err = passwordConfig.getConfigFromENV()
+			if err != nil {
+				return &Config{}, err
+			}
+
+			config = &Config{DBConfig: &dbConfig, JWTConfig: &jwtConfig, PasswordConfig: &passwordConfig}
+		}
+	}
+	return config, nil
+}
+
+type DBConfig struct {
+	host         string
+	port         int
+	user         string
+	password     string
+	dbname       string
+	MaxOpenConns int
+	MaxIdleConns int
+}
+
+func getVarFromFileOrENV(key string) (string, error) {
+	fileName := os.Getenv(key + "_FILE")
+	if fileName != "" {
+		value, err := readFile(fileName)
+		if err != nil {
+			return "", err
+		}
+		return string(value), nil
+	} else {
+		return os.Getenv(key), nil
+	}
+}
+
+func (c *DBConfig) getConfigFromENV() error {
+	port, err := strconv.Atoi(os.Getenv("DB_PORT"))
+	if err != nil {
+		return err
+	}
+	c.port = port
+
+	maxOpenConns, err := strconv.Atoi(os.Getenv("MAX_OPEN_CONNS"))
+	if err != nil {
+		return err
+	}
+	c.MaxOpenConns = maxOpenConns
+
+	maxIdleConns, err := strconv.Atoi(os.Getenv("MAX_IDLE_CONNS"))
+	if err != nil {
+		return err
+	}
+	c.MaxIdleConns = maxIdleConns
+
+	password, err := getVarFromFileOrENV("DB_PASSWORD")
+	if err != nil {
+		return err
+	}
+	c.password = password
+
+	user, err := getVarFromFileOrENV("DB_USER")
+	if err != nil {
+		return err
+	}
+	c.user = user
+
+	c.host = os.Getenv("DB_HOST")
+	c.dbname = os.Getenv("DB_NAME")
+	return nil
+}
+
+func (c *DBConfig) GetPsqlConn() string {
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", c.host, c.port, c.user, c.password, c.dbname)
+}
+
+type JWTConfig struct {
+	PrivateKey *ecdsa.PrivateKey
+	PublicKey  *ecdsa.PublicKey
+}
+
+func (c *JWTConfig) getConfigFromENV() error {
+	priv, err := readFile(os.Getenv("JWT_PRIVATE_KEY_FILE"))
+	if err != nil {
+		return err
+	}
+
+	privateKey, err := jwt.ParseECPrivateKeyFromPEM(priv)
+	if err != nil {
+		return err
+	}
+	c.PrivateKey = privateKey
+
+	publ, err := readFile(os.Getenv("JWT_PUBLIC_KEY_FILE"))
+	if err != nil {
+		return err
+	}
+
+	publicKey, err := jwt.ParseECPublicKeyFromPEM(publ)
+	if err != nil {
+		return err
+	}
+	c.PublicKey = publicKey
+	return nil
+}
+
+func readFile(fileName string) ([]byte, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Panic()
+		}
+	}(file)
+	return ioutil.ReadAll(file)
+}
+
+type PasswordConfig struct {
+	BcryptCost int
+	PepperKey  []byte
+}
+
+func (c *PasswordConfig) getConfigFromENV() error {
+	bcryptCost, err := strconv.Atoi(os.Getenv("BCRYPT_COST"))
+	if err != nil {
+		return err
+	}
+	c.BcryptCost = bcryptCost
+	pepperKey, err := getVarFromFileOrENV("PEPPER_KEY")
+	if err != nil {
+		return err
+	}
+	c.PepperKey = []byte(pepperKey)
+	return err
+}

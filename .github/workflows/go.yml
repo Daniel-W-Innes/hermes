@@ -30,7 +30,7 @@ jobs:
         
     - uses: finnp/create-file-action@master
       env:
-        FILE_NAME: secrets/jwt_public_key.pem
+        FILE_NAME: secrets/jwt_public_key
         FILE_DATA: test
         
     - uses: finnp/create-file-action@master

@@ -119,23 +119,23 @@ type JWTConfig struct {
 }
 
 func (c *JWTConfig) getConfigFromENV() error {
-	priv, err := readFile(os.Getenv("JWT_PRIVATE_KEY_FILE"))
+	priv, err := getVarFromFileOrENV("JWT_PRIVATE_KEY")
 	if err != nil {
 		return err
 	}
 
-	privateKey, err := jwt.ParseECPrivateKeyFromPEM(priv)
+	privateKey, err := jwt.ParseECPrivateKeyFromPEM([]byte(priv))
 	if err != nil {
 		return err
 	}
 	c.PrivateKey = privateKey
 
-	publ, err := readFile(os.Getenv("JWT_PUBLIC_KEY_FILE"))
+	publ, err := getVarFromFileOrENV("JWT_PUBLIC_KEY")
 	if err != nil {
 		return err
 	}
 
-	publicKey, err := jwt.ParseECPublicKeyFromPEM(publ)
+	publicKey, err := jwt.ParseECPublicKeyFromPEM([]byte(publ))
 	if err != nil {
 		return err
 	}

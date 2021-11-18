@@ -2,9 +2,7 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/Daniel-W-Innes/hermes/utils"
@@ -28,9 +26,9 @@ func cleanDB() error {
 	if err != nil {
 		return err
 	}
-	db.MustExec("TRUNCATE TABLE recipient RESTART IDENTITY CASCADE")
-	db.MustExec("TRUNCATE TABLE message RESTART IDENTITY CASCADE")
-	db.MustExec("TRUNCATE TABLE app_user RESTART IDENTITY CASCADE")
+	db.Exec("TRUNCATE TABLE recipients RESTART IDENTITY CASCADE")
+	db.Exec("TRUNCATE TABLE messages RESTART IDENTITY CASCADE")
+	db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
 	return nil
 }
 
@@ -118,9 +116,11 @@ func TestAddUser(t *testing.T) {
 		t.FailNow()
 	}
 
-	var user models.User
-	err = db.Get(&user, "SELECT * FROM app_user WHERE username=$1", userLogin.Username)
-	if err != nil {
+	assertJwtBody(t, resp)
+
+	user := new(models.User)
+	result := db.Where("username = ?", userLogin.Username).First(user)
+	if result.Error != nil {
 		t.Logf("user missing from db: %s", err)
 		t.FailNow()
 	} else {
@@ -129,7 +129,6 @@ func TestAddUser(t *testing.T) {
 			t.Logf("password key is not hashed: %s", string(user.PasswordKey))
 			t.FailNow()
 		}
-		assertJwtBody(t, resp)
 	}
 }
 
@@ -157,7 +156,7 @@ func TestLogin(t *testing.T) {
 	assertJwtBody(t, resp)
 }
 
-func addMessage(t *testing.T, app *fiber.App, token string, message map[string]map[string]interface{}) *http.Response {
+func addMessage(t *testing.T, app *fiber.App, token string, message map[string]interface{}) *http.Response {
 
 	reqBodyBytes, err := json.Marshal(message)
 	if err != nil {
@@ -183,33 +182,11 @@ func TestAddMessage(t *testing.T) {
 
 	setup(t)
 	defer teardown(t)
+
 	resp := addUser(t, app)
 	token := getJwtFromResp(t, resp)
 
-	resp = addMessage(t, app, token, map[string]map[string]interface{}{"message": {"text": "test"}})
-
-	db, err := utils.Connection()
-	if err != nil {
-		t.Log("failed to connect to db")
-		t.FailNow()
-	}
-
-	var message models.Message
-	err = db.Get(&message, "SELECT * FROM message WHERE id=1")
-	if err != nil {
-		t.Logf("message missing from db: %s", err)
-		t.FailNow()
-	}
-
-	if message.Text != "test" || message.ID != 1 {
-		t.Logf("the message is not the same %s", message.Text)
-		t.FailNow()
-	}
-
-	if message.Palindrome {
-		t.Logf("the message not palindrome %s", message.Text)
-		t.FailNow()
-	}
+	resp = addMessage(t, app, token, map[string]interface{}{"text": "test"})
 
 	if resp.StatusCode != fiber.StatusOK {
 		t.Logf("bad status: %s", resp.Status)
@@ -234,6 +211,32 @@ func TestAddMessage(t *testing.T) {
 			t.FailNow()
 		}
 	}
+
+	db, err := utils.Connection()
+	if err != nil {
+		t.Log("failed to connect to db")
+		t.FailNow()
+	}
+	var messages []models.Message
+	result := db.Find(&messages)
+	if result.Error != nil {
+		t.Logf("failed to query db: %s", result.Error)
+		t.FailNow()
+	}
+	if result.RowsAffected != 1 {
+		t.Logf("wrong number of rows in db: %d", result.RowsAffected)
+		t.FailNow()
+	}
+
+	if messages[0].Text != "test" || messages[0].ID != 1 {
+		t.Logf("the message is not the same %s", messages[0].Text)
+		t.FailNow()
+	}
+
+	if messages[0].Palindrome {
+		t.Logf("the message not palindrome %s", messages[0].Text)
+		t.FailNow()
+	}
 }
 
 func TestGetMessage(t *testing.T) {
@@ -245,9 +248,9 @@ func TestGetMessage(t *testing.T) {
 	resp := addUser(t, app)
 	token := getJwtFromResp(t, resp)
 
-	_ = addMessage(t, app, token, map[string]map[string]interface{}{"message": {"text": "test"}})
+	_ = addMessage(t, app, token, map[string]interface{}{"text": "test"})
 
-	req := httptest.NewRequest("GET", "/message?id=1", nil)
+	req := httptest.NewRequest("GET", "/message/1", nil)
 	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	req.Header.Set(fiber.HeaderAuthorization, "Bearer "+token)
 
@@ -262,25 +265,22 @@ func TestGetMessage(t *testing.T) {
 		t.Logf("bad Content-Type: %s", cType)
 		t.FailNow()
 	} else {
-		var messageBundle models.MessageBundle
+		var message models.Message
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			t.Logf("failed to read body %s", err)
 			t.FailNow()
-		} else if err = json.Unmarshal(b, &messageBundle); err != nil {
+		} else if err = json.Unmarshal(b, &message); err != nil {
 			t.Logf("failed unmarshal body %s %s", string(b), err)
 			t.FailNow()
 		} else {
-			if !reflect.DeepEqual(models.MessageBundle{
-				Message: models.Message{
-					ID:         1,
-					OwnerID:    1,
-					Text:       "test",
-					Palindrome: false,
-				},
-				RecipientIds: nil,
-			}, messageBundle) {
-				t.Logf("the message is not the same %s", messageBundle.Message.Text)
+			if !reflect.DeepEqual(models.Message{
+				ID:         1,
+				OwnerID:    1,
+				Text:       "test",
+				Palindrome: false,
+			}, message) {
+				t.Logf("the message is not the same %s", message.Text)
 				t.FailNow()
 			}
 		}
@@ -299,7 +299,7 @@ func TestGetMessages(t *testing.T) {
 	numberMessage := 2
 
 	for i := 1; i <= numberMessage; i++ {
-		_ = addMessage(t, app, token, map[string]map[string]interface{}{"message": {"text": fmt.Sprintf("test%d", i)}})
+		_ = addMessage(t, app, token, map[string]interface{}{"text": fmt.Sprintf("test%d", i)})
 	}
 
 	req := httptest.NewRequest("GET", "/message", nil)
@@ -317,7 +317,7 @@ func TestGetMessages(t *testing.T) {
 		t.Logf("bad Content-Type: %s", cType)
 		t.FailNow()
 	} else {
-		messages := new(map[string][]models.MessageBundle)
+		var messages map[string][]models.Message
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			t.Logf("failed to read body %s", err)
@@ -325,24 +325,25 @@ func TestGetMessages(t *testing.T) {
 		} else if err = json.Unmarshal(b, &messages); err != nil {
 			t.Logf("failed unmarshal body %s %s", string(b), err)
 			t.FailNow()
+		} else if len(messages["messages"]) != numberMessage {
+			t.Logf("wrong number of messages in body %s", string(b))
+			t.FailNow()
 		} else {
-			for i := 1; i <= 2; i++ {
-				if !reflect.DeepEqual(models.MessageBundle{
-					Message: models.Message{
-						ID:         i,
-						OwnerID:    1,
-						Text:       fmt.Sprintf("test%d", i),
-						Palindrome: false,
-					},
-					RecipientIds: nil,
-				}, (*messages)["messages"][i-1]) {
-					t.Logf("the message is not the same %v", (*messages)["messages"][i-1])
+			for i := 1; i <= numberMessage; i++ {
+				if !reflect.DeepEqual(models.Message{
+					ID:         uint(i),
+					OwnerID:    1,
+					Text:       fmt.Sprintf("test%d", i),
+					Palindrome: false,
+				}, messages["messages"][i-1]) {
+					t.Logf("the message is not the same %v", messages["messages"][i-1])
 					t.FailNow()
 				}
 			}
 		}
 	}
 }
+
 func TestDeleteMessage(t *testing.T) {
 	app := getApp()
 
@@ -352,9 +353,9 @@ func TestDeleteMessage(t *testing.T) {
 	resp := addUser(t, app)
 	token := getJwtFromResp(t, resp)
 
-	_ = addMessage(t, app, token, map[string]map[string]interface{}{"message": {"text": "test"}})
+	_ = addMessage(t, app, token, map[string]interface{}{"text": "test"})
 
-	req := httptest.NewRequest("DELETE", "/message?id=1", nil)
+	req := httptest.NewRequest("DELETE", "/message/1", nil)
 	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	req.Header.Set(fiber.HeaderAuthorization, "Bearer "+token)
 
@@ -375,12 +376,15 @@ func TestDeleteMessage(t *testing.T) {
 			t.FailNow()
 		}
 
-		var message models.Message
-		err = db.Get(&message, "SELECT * FROM message WHERE id=1")
-		if !errors.Is(err, sql.ErrNoRows) {
-			t.Logf("message not removed db: %v", message)
+		var messages []models.Message
+		result := db.Find(&messages)
+		if result.Error != nil {
+			t.Logf("failed to query db: %s", result.Error)
 			t.FailNow()
 		}
-
+		if result.RowsAffected != 0 {
+			t.Logf("wrong number of rows in db: %d", result.RowsAffected)
+			t.FailNow()
+		}
 	}
 }

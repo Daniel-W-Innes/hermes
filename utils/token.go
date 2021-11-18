@@ -9,11 +9,11 @@ import (
 	"strings"
 )
 
-func ValidateAuth(header string) (int, error) {
+func ValidateAuth(header string) (uint, error) {
 	config, err := models.GetConfig()
 	if err != nil {
 		log.Printf("failed to get config: %s\n", err)
-		return -1, fiber.ErrInternalServerError
+		return 0, fiber.ErrInternalServerError
 	}
 
 	if strings.HasPrefix(header, "Bearer ") {
@@ -26,14 +26,14 @@ func ValidateAuth(header string) (int, error) {
 			},
 		)
 		if err != nil {
-			return -1, err
+			return 0, err
 		}
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			return int(claims["sub"].(float64)), nil
+			return uint(claims["sub"].(float64)), nil
 		} else {
-			return -1, fiber.NewError(fiber.StatusUnauthorized, "token is not valid")
+			return 0, fiber.NewError(fiber.StatusUnauthorized, "token is not valid")
 		}
 	} else {
-		return -1, fiber.NewError(fiber.StatusUnauthorized, "missing bearer in header")
+		return 0, fiber.NewError(fiber.StatusUnauthorized, "missing bearer in header")
 	}
 }

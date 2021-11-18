@@ -1,27 +1,21 @@
 package routes
 
 import (
-	"database/sql"
-	"errors"
-	"fmt"
 	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/Daniel-W-Innes/hermes/utils"
 	"github.com/gofiber/fiber/v2"
-	"github.com/lib/pq"
+	"gorm.io/gorm/clause"
 	"log"
-	"strconv"
 )
 
-var MissingMessageID = errors.New("missing message id in prams")
-
 func addMessage(c *fiber.Ctx) error {
-	messageBundle := new(models.MessageBundle)
+	message := new(models.Message)
 
-	if err := c.BodyParser(messageBundle); err != nil {
+	if err := c.BodyParser(message); err != nil {
 		return err
 	}
 
-	err := utils.Validate(messageBundle)
+	err := utils.Validate(message)
 	if err != nil {
 		return err
 	}
@@ -38,29 +32,19 @@ func addMessage(c *fiber.Ctx) error {
 		return err
 	}
 
-	messageBundle.Message.OwnerID = userId
+	message.OwnerID = userId
 
-	messageBundle.Message.Check()
+	message.Check()
 
-	id, err := messageBundle.Insert(db)
-	if err != nil {
-		if err.(*pq.Error).Code.Name() == "foreign_key_violation" {
-			if err.(*pq.Error).Constraint == "recipient_recipient_id_fkey" {
-				return fiber.NewError(fiber.StatusBadRequest, "not valid recipient")
-			} else {
-				return fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("not valid owner %d this should not be possible", userId))
-			}
-		}
-		log.Printf("failed to insert messag: %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-	return c.JSON(fiber.Map{"id": id})
+	db.Clauses(clause.Returning{}).Save(message)
+
+	return c.JSON(fiber.Map{"id": message.ID})
 }
 
 func deleteMessage(c *fiber.Ctx) error {
-	messageId, err := strconv.Atoi(c.Query("id"))
+	messageId, err := c.ParamsInt("id")
 	if err != nil {
-		return MissingMessageID
+		return err
 	}
 
 	db, err := utils.Connection()
@@ -75,37 +59,26 @@ func deleteMessage(c *fiber.Ctx) error {
 		return err
 	}
 
-	message := models.Message{ID: messageId, OwnerID: userId}
+	result := db.Where("id = ?", messageId).Where("owner_id = ?", userId).Delete(&models.Message{})
 
-	affected, err := message.Delete(db)
-	if err != nil {
-		log.Printf("failed to delete message: %s\n", err)
+	if result.Error != nil {
+		log.Printf("failed to delete message: %s\n", result.Error)
 		return fiber.ErrInternalServerError
 	}
-	if affected == 0 {
+	if result.RowsAffected == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "message does not exits or token is not the owner")
 	}
 	return c.SendString("message deleted")
 }
 
 func getMessages(c *fiber.Ctx) error {
-	messageBundle := models.MessageBundle{}
+	var messages []models.Message
+	var messagesFromAssociation []models.Message
 
 	authorization := c.Get(fiber.HeaderAuthorization)
 	userId, err := utils.ValidateAuth(authorization)
 	if err != nil {
 		return err
-	}
-	messageBundle.Message.OwnerID = userId
-	messageIdStr := c.Query("id")
-	if messageIdStr != "" {
-		messageId, err := strconv.Atoi(messageIdStr)
-		if err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "message id need to a int")
-		}
-
-		messageBundle.Message.ID = messageId
-		return getMessage(c, &messageBundle)
 	}
 
 	db, err := utils.Connection()
@@ -114,45 +87,23 @@ func getMessages(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
-	messageBundles, err := messageBundle.GetAll(db, true)
+	db.Where("owner_id = ?", userId).Find(&messages)
+
+	err = db.Model(&models.Message{}).Where("id = ?", userId).Association("Recipients").Find(&messagesFromAssociation)
+
+	copy(messages[len(messages):], messagesFromAssociation)
+
 	if err != nil {
 		log.Printf("failed to get messages %s\n", err)
 		return fiber.ErrInternalServerError
 	}
 	return c.JSON(fiber.Map{
-		"messages": messageBundles,
+		"messages": messages,
 	})
 }
 
-func getMessage(c *fiber.Ctx, messageBundle *models.MessageBundle) error {
-	db, err := utils.Connection()
-	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-
-	err = messageBundle.Get(db, true)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return fiber.NewError(fiber.StatusNotFound, "message not found")
-		}
-		log.Printf("failed to get message %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-	return c.JSON(messageBundle)
-}
-
-func editMessage(c *fiber.Ctx) error {
-	messageId, err := strconv.Atoi(c.Query("id"))
-	if err != nil {
-		return MissingMessageID
-	}
-
-	db, err := utils.Connection()
-	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return fiber.ErrInternalServerError
-	}
+func getMessage(c *fiber.Ctx) error {
+	var message models.Message
 
 	authorization := c.Get(fiber.HeaderAuthorization)
 	userId, err := utils.ValidateAuth(authorization)
@@ -160,9 +111,57 @@ func editMessage(c *fiber.Ctx) error {
 		return err
 	}
 
-	message := models.Message{ID: messageId, OwnerID: userId}
+	messageId, err := c.ParamsInt("id")
+	if err != nil {
+		return err
+	}
 
-	err = message.Get(db, false)
+	db, err := utils.Connection()
+	if err != nil {
+		log.Printf("failed to connect to db: %s\n", err)
+		return fiber.ErrInternalServerError
+	}
+
+	result := db.Where("id = ?", messageId).Where("owner_id = ?", userId).Limit(1).Find(&message)
+
+	if result.Error != nil {
+		log.Printf("failed to delete message: %s\n", result.Error)
+		return fiber.ErrInternalServerError
+	}
+	if result.RowsAffected == 0 {
+		return fiber.NewError(fiber.StatusNotFound, "message not found")
+	}
+	return c.JSON(message)
+}
+
+func editMessage(c *fiber.Ctx) error {
+	var message models.Message
+
+	authorization := c.Get(fiber.HeaderAuthorization)
+	userId, err := utils.ValidateAuth(authorization)
+	if err != nil {
+		return err
+	}
+
+	messageId, err := c.ParamsInt("id")
+	if err != nil {
+		return err
+	}
+
+	db, err := utils.Connection()
+	if err != nil {
+		log.Printf("failed to connect to db: %s\n", err)
+		return fiber.ErrInternalServerError
+	}
+
+	result := db.Where("id = ?", messageId).Where("owner_id = ?", userId).Limit(1).Find(&message)
+	if result.Error != nil {
+		log.Printf("failed to delete message: %s\n", result.Error)
+		return fiber.ErrInternalServerError
+	}
+	if result.RowsAffected == 0 {
+		return fiber.NewError(fiber.StatusNotFound, "message not found")
+	}
 
 	if err := c.BodyParser(&message); err != nil {
 		return err
@@ -170,7 +169,8 @@ func editMessage(c *fiber.Ctx) error {
 
 	message.Check()
 
-	err = message.Update(db)
+	db.Save(&message)
+
 	if err != nil {
 		log.Printf("failed to update message %s\n", err)
 		return fiber.ErrInternalServerError
@@ -183,7 +183,8 @@ func Message(app *fiber.App) {
 	route := app.Group("/message")
 
 	route.Post("", addMessage)
-	route.Delete("", deleteMessage)
+	route.Delete("/:id", deleteMessage)
 	route.Get("", getMessages)
-	route.Patch("", editMessage)
+	route.Get("/:id", getMessage)
+	route.Post("/:id", editMessage)
 }

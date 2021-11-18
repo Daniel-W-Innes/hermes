@@ -5,14 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/jmoiron/sqlx"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type User struct {
-	ID          int    `db:"id"`
-	Username    string `db:"username"`
-	PasswordKey []byte `db:"password_key"`
+	gorm.Model
+	Username    string
+	PasswordKey []byte
+	Messages    []Message `gorm:"foreignKey:OwnerID"`
 }
 
 //preHash and encode the user inputted password
@@ -35,17 +36,6 @@ func (u *User) SetPassword(password []byte) error {
 	}
 	(*u).PasswordKey = passwordKey
 	return nil
-}
-
-func (u *User) Insert(db *sqlx.DB) error {
-	row := db.QueryRow("INSERT INTO app_user (username, password_key) VALUES ($1,$2) RETURNING id", u.Username, u.PasswordKey)
-	err := row.Scan(&u.ID)
-	return err
-}
-
-func (u *User) Get(db *sqlx.DB) error {
-	return db.Get(u, "SELECT * FROM app_user WHERE username=$1;", u.Username)
-
 }
 
 func (u *User) GenerateJWT() (*JWT, error) {

@@ -13,11 +13,11 @@ func health(c *fiber.Ctx) error {
 }
 
 func initDB() error {
-	db, err := utils.Connection()
-	if err != nil {
-		return err
+	db, hermesError := utils.Connection()
+	if hermesError != nil {
+		return hermesError
 	}
-	err = db.AutoMigrate(&models.Message{}, &models.User{})
+	err := db.AutoMigrate(&models.Message{}, &models.User{})
 	if err != nil {
 		return err
 	}

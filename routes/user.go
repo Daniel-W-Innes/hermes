@@ -1,27 +1,27 @@
 package routes
 
 import (
+	"fmt"
 	"github.com/Daniel-W-Innes/hermes/controllers"
+	"github.com/Daniel-W-Innes/hermes/hermesErrors"
 	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/Daniel-W-Innes/hermes/utils"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
-	"log"
 )
 
-func preHandlerUser(c *fiber.Ctx, userLogin *models.UserLogin) (*gorm.DB, error) {
+func preHandlerUser(c *fiber.Ctx, userLogin *models.UserLogin) (*gorm.DB, hermesErrors.HermesError) {
 	db, err := utils.Connection()
 	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return nil, fiber.ErrInternalServerError
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to connect to db: %s\n", err)).Wrap("failed on pre handler for user\n")
 	}
 	if err := c.BodyParser(userLogin); err != nil {
-		return nil, err
+		return nil, hermesErrors.UnprocessableEntity(fmt.Sprintf("failed to parser user input: %s\n", err)).Wrap("failed on pre handler for user\n")
 	}
 
-	err = utils.Validate(userLogin)
-	if err != nil {
-		return nil, err
+	hermesError := utils.Validate(userLogin)
+	if hermesError != nil {
+		return nil, hermesError.Wrap("failed on pre handler for user\n")
 	}
 
 	return db, nil
@@ -34,9 +34,10 @@ func login(c *fiber.Ctx) error {
 		return err
 	}
 
-	message, err := controllers.Login(db, userLogin)
-	if err != nil {
-		return err
+	message, hermesError := controllers.Login(db, userLogin)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 	return c.JSON(message)
 }
@@ -48,9 +49,10 @@ func addUser(c *fiber.Ctx) error {
 		return err
 	}
 
-	message, err := controllers.AddUser(db, userLogin)
-	if err != nil {
-		return err
+	message, hermesError := controllers.AddUser(db, userLogin)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 	return c.JSON(message)
 }

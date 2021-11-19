@@ -1,35 +1,35 @@
 package routes
 
 import (
+	"fmt"
 	"github.com/Daniel-W-Innes/hermes/controllers"
+	"github.com/Daniel-W-Innes/hermes/hermesErrors"
 	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/Daniel-W-Innes/hermes/utils"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
-	"log"
 )
 
-func preHandlerMessage(c *fiber.Ctx, message *models.Message) (*gorm.DB, uint, error) {
+func preHandlerMessage(c *fiber.Ctx, message *models.Message) (*gorm.DB, uint, hermesErrors.HermesError) {
 	authorization := c.Get(fiber.HeaderAuthorization)
 	userId, err := utils.ValidateAuth(authorization)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, err.Wrap("failed on pre handler for message\n")
 	}
 
 	db, err := utils.Connection()
 	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return nil, 0, fiber.ErrInternalServerError
+		return nil, 0, err.Wrap("failed on pre handler for message")
 	}
 
 	if message != nil {
 		if err := c.BodyParser(message); err != nil {
-			return nil, 0, err
+			return nil, 0, hermesErrors.UnprocessableEntity(fmt.Sprintf("failed to parser user input: %s\n", err)).Wrap("failed on pre handler for message\n")
 		}
 
 		err := utils.Validate(message)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, err.Wrap("failed on pre handler for message\n")
 		}
 
 	}

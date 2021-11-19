@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"fmt"
+	"github.com/Daniel-W-Innes/hermes/hermesErrors"
 	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -15,19 +17,18 @@ func AddMessage(db *gorm.DB, message *models.Message, userId uint) interface{} {
 	return fiber.Map{"id": message.ID}
 }
 
-func DeleteMessage(db *gorm.DB, messageId int, userId uint) (interface{}, error) {
+func DeleteMessage(db *gorm.DB, messageId int, userId uint) (fiber.Map, hermesErrors.HermesError) {
 	result := db.Where("id = ?", messageId).Where("owner_id = ?", userId).Delete(&models.Message{})
 	if result.Error != nil {
-		log.Printf("failed to delete message: %s\n", result.Error)
-		return nil, fiber.ErrInternalServerError
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to delete message: %s\n", result.Error))
 	}
 	if result.RowsAffected == 0 {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "message does not exits or token is not the owner")
+		return nil, hermesErrors.MessageDoesNotExits()
 	}
 	return fiber.Map{"result": "message deleted"}, nil
 }
 
-func GetMessages(db *gorm.DB, userId uint) (interface{}, error) {
+func GetMessages(db *gorm.DB, userId uint) (fiber.Map, hermesErrors.HermesError) {
 	var messages []models.Message
 	var messagesFromAssociation []models.Message
 
@@ -38,50 +39,47 @@ func GetMessages(db *gorm.DB, userId uint) (interface{}, error) {
 	copy(messages[len(messages):], messagesFromAssociation)
 
 	if err != nil {
-		log.Printf("failed to get messages %s\n", err)
-		return nil, fiber.ErrInternalServerError
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get messages %s\n", err))
 	}
 	return fiber.Map{"messages": messages}, nil
 }
 
-func GetMessage(db *gorm.DB, messageId int, userId uint) (interface{}, error) {
+func GetMessage(db *gorm.DB, messageId int, userId uint) (*models.Message, hermesErrors.HermesError) {
 	var message models.Message
 
 	result := db.Where("id = ?", messageId).Where("owner_id = ?", userId).Limit(1).Find(&message)
 
 	if result.Error != nil {
 		log.Printf("failed to delete message: %s\n", result.Error)
-		return nil, fiber.ErrInternalServerError
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to delete message: %s\n", result.Error))
 	}
 	if result.RowsAffected == 0 {
-		return nil, fiber.NewError(fiber.StatusNotFound, "message not found")
+		return nil, hermesErrors.MessageDoesNotExits()
 	}
-	return message, nil
+	return &message, nil
 }
 
-func EditMessage(db *gorm.DB, updateMessage func(out interface{}) error, messageId int, userId uint) (interface{}, error) {
+func EditMessage(db *gorm.DB, updateMessage func(out interface{}) error, messageId int, userId uint) (*models.Message, hermesErrors.HermesError) {
 	var message models.Message
 
 	result := db.Where("id = ?", messageId).Where("owner_id = ?", userId).Limit(1).Find(&message)
 	if result.Error != nil {
-		log.Printf("failed to delete message: %s\n", result.Error)
-		return nil, fiber.ErrInternalServerError
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to delete message: %s\n", result.Error))
 	}
 	if result.RowsAffected == 0 {
-		return nil, fiber.NewError(fiber.StatusNotFound, "message not found")
+		return nil, hermesErrors.MessageDoesNotExits()
 	}
 
 	if err := updateMessage(&message); err != nil {
-		return nil, err
+		return nil, hermesErrors.UnprocessableEntity(fmt.Sprintf("failed to update message with user input: %s\n", err))
 	}
 
 	message.Check()
 
 	result = db.Save(&message)
 	if result.Error != nil {
-		log.Printf("failed to update message %s\n", result.Error)
-		return nil, fiber.ErrInternalServerError
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to update message %s\n", result.Error))
 	}
 
-	return message, nil
+	return &message, nil
 }

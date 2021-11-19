@@ -366,7 +366,7 @@ func TestDeleteMessage(t *testing.T) {
 	} else if resp.StatusCode != fiber.StatusOK {
 		t.Logf("bad status: %s", resp.Status)
 		t.FailNow()
-	} else if cType := resp.Header.Get(fiber.HeaderContentType); cType != fiber.MIMETextPlainCharsetUTF8 {
+	} else if cType := resp.Header.Get(fiber.HeaderContentType); cType != fiber.MIMEApplicationJSON {
 		t.Logf("bad Content-Type: %s", cType)
 		t.FailNow()
 	} else {

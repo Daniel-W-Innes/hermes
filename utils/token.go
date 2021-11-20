@@ -8,23 +8,23 @@ import (
 	"strings"
 )
 
-func ValidateAuth(header string) (uint, hermesErrors.HermesError) {
-	config, err := models.GetConfig()
-	if err != nil {
-		return 0, hermesErrors.InternalServerError(fmt.Sprintf("failed to get config: %s\n", err))
-	}
-
+func ValidateAuth(config *models.JWTConfig, header string) (uint, hermesErrors.HermesError) {
 	if strings.HasPrefix(header, "Bearer ") {
 		token, err := jwt.Parse(strings.TrimPrefix(header, "Bearer "),
 			func(token *jwt.Token) (interface{}, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 					return nil, hermesErrors.UnexpectedSigningMethod(token.Header["alg"])
 				}
-				return config.JWTConfig.PublicKey, nil
+				return &config.PublicKey, nil
 			},
 		)
 		if err != nil {
-			return 0, err.(hermesErrors.HermesError)
+			switch err.(type) {
+			default:
+				return 0, hermesErrors.InternalServerError(fmt.Sprintf("failed to validate auth %s\n", err))
+			case hermesErrors.HermesError:
+				return 0, err.(hermesErrors.HermesError)
+			}
 		}
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 			return uint(claims["sub"].(float64)), nil

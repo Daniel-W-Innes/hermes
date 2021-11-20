@@ -21,8 +21,8 @@ var userLogin = models.UserLogin{
 	Password: "password",
 }
 
-func cleanDB() error {
-	db, err := utils.Connection()
+func cleanDB(config *models.DBConfig) error {
+	db, err := utils.Connection(config)
 	if err != nil {
 		return err
 	}
@@ -32,16 +32,16 @@ func cleanDB() error {
 	return nil
 }
 
-func setup(t *testing.T) {
-	err := initDB()
+func setup(t *testing.T, config *models.DBConfig) {
+	err := initDB(config)
 	if err != nil {
 		t.Logf("failed to init db %s", err)
 		t.FailNow()
 	}
 }
 
-func teardown(t *testing.T) {
-	err := cleanDB()
+func teardown(t *testing.T, config *models.DBConfig) {
+	err := cleanDB(config)
 	if err != nil {
 		t.Logf("failed to clean db %s", err)
 		t.FailNow()
@@ -105,12 +105,17 @@ func addUser(t *testing.T, app *fiber.App) *http.Response {
 func TestAddUser(t *testing.T) {
 	app := getApp()
 
-	setup(t)
-	defer teardown(t)
+	config, err := models.GetConfig()
+	if err != nil {
+		t.FailNow()
+	}
+
+	setup(t, &config.DBConfig)
+	defer teardown(t, &config.DBConfig)
 
 	resp := addUser(t, app)
 
-	db, err := utils.Connection()
+	db, err := utils.Connection(&config.DBConfig)
 	if err != nil {
 		t.Log("failed to connect to db")
 		t.FailNow()
@@ -135,8 +140,13 @@ func TestAddUser(t *testing.T) {
 func TestLogin(t *testing.T) {
 	app := getApp()
 
-	setup(t)
-	defer teardown(t)
+	config, err := models.GetConfig()
+	if err != nil {
+		t.FailNow()
+	}
+
+	setup(t, &config.DBConfig)
+	defer teardown(t, &config.DBConfig)
 
 	addUser(t, app)
 
@@ -180,8 +190,13 @@ func addMessage(t *testing.T, app *fiber.App, token string, message map[string]i
 func TestAddMessage(t *testing.T) {
 	app := getApp()
 
-	setup(t)
-	defer teardown(t)
+	config, err := models.GetConfig()
+	if err != nil {
+		t.FailNow()
+	}
+
+	setup(t, &config.DBConfig)
+	defer teardown(t, &config.DBConfig)
 
 	resp := addUser(t, app)
 	token := getJwtFromResp(t, resp)
@@ -212,7 +227,7 @@ func TestAddMessage(t *testing.T) {
 		}
 	}
 
-	db, err := utils.Connection()
+	db, err := utils.Connection(&config.DBConfig)
 	if err != nil {
 		t.Log("failed to connect to db")
 		t.FailNow()
@@ -242,8 +257,13 @@ func TestAddMessage(t *testing.T) {
 func TestGetMessage(t *testing.T) {
 	app := getApp()
 
-	setup(t)
-	defer teardown(t)
+	config, err := models.GetConfig()
+	if err != nil {
+		t.FailNow()
+	}
+
+	setup(t, &config.DBConfig)
+	defer teardown(t, &config.DBConfig)
 
 	resp := addUser(t, app)
 	token := getJwtFromResp(t, resp)
@@ -254,7 +274,7 @@ func TestGetMessage(t *testing.T) {
 	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	req.Header.Set(fiber.HeaderAuthorization, "Bearer "+token)
 
-	resp, err := app.Test(req, int(time.Hour.Milliseconds()))
+	resp, err = app.Test(req, int(time.Hour.Milliseconds()))
 	if err != nil {
 		t.Logf("failed to test app %s", err)
 		t.FailNow()
@@ -290,8 +310,13 @@ func TestGetMessage(t *testing.T) {
 func TestGetMessages(t *testing.T) {
 	app := getApp()
 
-	setup(t)
-	defer teardown(t)
+	config, err := models.GetConfig()
+	if err != nil {
+		t.FailNow()
+	}
+
+	setup(t, &config.DBConfig)
+	defer teardown(t, &config.DBConfig)
 
 	resp := addUser(t, app)
 	token := getJwtFromResp(t, resp)
@@ -306,7 +331,7 @@ func TestGetMessages(t *testing.T) {
 	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	req.Header.Set(fiber.HeaderAuthorization, "Bearer "+token)
 
-	resp, err := app.Test(req, int(time.Hour.Milliseconds()))
+	resp, err = app.Test(req, int(time.Hour.Milliseconds()))
 	if err != nil {
 		t.Logf("failed to test app %s", err)
 		t.FailNow()
@@ -347,8 +372,13 @@ func TestGetMessages(t *testing.T) {
 func TestDeleteMessage(t *testing.T) {
 	app := getApp()
 
-	setup(t)
-	defer teardown(t)
+	config, err := models.GetConfig()
+	if err != nil {
+		t.FailNow()
+	}
+
+	setup(t, &config.DBConfig)
+	defer teardown(t, &config.DBConfig)
 
 	resp := addUser(t, app)
 	token := getJwtFromResp(t, resp)
@@ -359,7 +389,7 @@ func TestDeleteMessage(t *testing.T) {
 	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	req.Header.Set(fiber.HeaderAuthorization, "Bearer "+token)
 
-	resp, err := app.Test(req, int(time.Hour.Milliseconds()))
+	resp, err = app.Test(req, int(time.Hour.Milliseconds()))
 	if err != nil {
 		t.Logf("failed to test app %s", err)
 		t.FailNow()
@@ -370,7 +400,7 @@ func TestDeleteMessage(t *testing.T) {
 		t.Logf("bad Content-Type: %s", cType)
 		t.FailNow()
 	} else {
-		db, err := utils.Connection()
+		db, err := utils.Connection(&config.DBConfig)
 		if err != nil {
 			t.Log("failed to connect to db")
 			t.FailNow()

@@ -8,14 +8,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func Connection() (*gorm.DB, hermesErrors.HermesError) {
-
-	config, err := models.GetConfig()
-	if err != nil {
-		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get config %s\n", err))
-	}
-
-	db, err := gorm.Open(postgres.Open(config.DBConfig.GetPsqlConn()), &gorm.Config{PrepareStmt: true})
+func Connection(config *models.DBConfig) (*gorm.DB, hermesErrors.HermesError) {
+	db, err := gorm.Open(postgres.Open(config.GetPsqlConn()), &gorm.Config{PrepareStmt: true})
 	if err != nil {
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to initialize db session: %s\n", err))
 	}
@@ -24,8 +18,8 @@ func Connection() (*gorm.DB, hermesErrors.HermesError) {
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get generic database interface: %s\n", err))
 	}
 
-	sqlDB.SetMaxOpenConns(config.DBConfig.MaxOpenConns)
-	sqlDB.SetMaxIdleConns(config.DBConfig.MaxIdleConns)
+	sqlDB.SetMaxOpenConns(config.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(config.MaxIdleConns)
 
 	return db, nil
 }

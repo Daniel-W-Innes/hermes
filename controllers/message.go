@@ -7,14 +7,16 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"log"
 )
 
-func AddMessage(db *gorm.DB, message *models.Message, userId uint) interface{} {
+func AddMessage(db *gorm.DB, message *models.Message, userId uint) (interface{}, hermesErrors.HermesError) {
 	message.OwnerID = userId
 	message.Check()
-	db.Clauses(clause.Returning{}).Save(message)
-	return fiber.Map{"id": message.ID}
+	result := db.Clauses(clause.Returning{}).Save(message)
+	if result.Error != nil {
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to add message %s\n", result.Error))
+	}
+	return fiber.Map{"id": message.ID}, nil
 }
 
 func DeleteMessage(db *gorm.DB, messageId int, userId uint) (fiber.Map, hermesErrors.HermesError) {
@@ -32,15 +34,17 @@ func GetMessages(db *gorm.DB, userId uint) (fiber.Map, hermesErrors.HermesError)
 	var messages []models.Message
 	var messagesFromAssociation []models.Message
 
-	db.Where("owner_id = ?", userId).Find(&messages)
+	result := db.Where("owner_id = ?", userId).Find(&messages)
+	if result.Error != nil {
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get owned messages %s\n", result.Error))
+	}
 
 	err := db.Model(&models.Message{}).Where("id = ?", userId).Association("Recipients").Find(&messagesFromAssociation)
-
+	if err != nil {
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get messages by recipients %s\n", result.Error))
+	}
 	copy(messages[len(messages):], messagesFromAssociation)
 
-	if err != nil {
-		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get messages %s\n", err))
-	}
 	return fiber.Map{"messages": messages}, nil
 }
 
@@ -50,7 +54,6 @@ func GetMessage(db *gorm.DB, messageId int, userId uint) (*models.Message, herme
 	result := db.Where("id = ?", messageId).Where("owner_id = ?", userId).Limit(1).Find(&message)
 
 	if result.Error != nil {
-		log.Printf("failed to delete message: %s\n", result.Error)
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to delete message: %s\n", result.Error))
 	}
 	if result.RowsAffected == 0 {

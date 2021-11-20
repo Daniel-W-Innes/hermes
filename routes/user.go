@@ -10,31 +10,36 @@ import (
 	"gorm.io/gorm"
 )
 
-func preHandlerUser(c *fiber.Ctx, userLogin *models.UserLogin) (*gorm.DB, hermesErrors.HermesError) {
-	db, err := utils.Connection()
+func preHandlerUser(c *fiber.Ctx, userLogin *models.UserLogin) (*models.Config, *gorm.DB, hermesErrors.HermesError) {
+	config, err := models.GetConfig()
 	if err != nil {
-		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to connect to db: %s\n", err)).Wrap("failed on pre handler for user\n")
+		return nil, nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get config %s\n", err))
+	}
+
+	db, err := utils.Connection(&config.DBConfig)
+	if err != nil {
+		return nil, nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to connect to db: %s\n", err)).Wrap("failed on pre handler for user\n")
 	}
 	if err := c.BodyParser(userLogin); err != nil {
-		return nil, hermesErrors.UnprocessableEntity(fmt.Sprintf("failed to parser user input: %s\n", err)).Wrap("failed on pre handler for user\n")
+		return nil, nil, hermesErrors.UnprocessableEntity(fmt.Sprintf("failed to parser user input: %s\n", err)).Wrap("failed on pre handler for user\n")
 	}
 
 	hermesError := utils.Validate(userLogin)
 	if hermesError != nil {
-		return nil, hermesError.Wrap("failed on pre handler for user\n")
+		return nil, nil, hermesError.Wrap("failed on pre handler for user\n")
 	}
 
-	return db, nil
+	return config, db, nil
 }
 
 func login(c *fiber.Ctx) error {
 	userLogin := new(models.UserLogin)
-	db, err := preHandlerUser(c, userLogin)
+	config, db, err := preHandlerUser(c, userLogin)
 	if err != nil {
 		return err
 	}
 
-	message, hermesError := controllers.Login(db, userLogin)
+	message, hermesError := controllers.Login(db, config, userLogin)
 	if hermesError != nil {
 		hermesError.LogPrivate()
 		return hermesError
@@ -44,12 +49,12 @@ func login(c *fiber.Ctx) error {
 
 func addUser(c *fiber.Ctx) error {
 	userLogin := new(models.UserLogin)
-	db, err := preHandlerUser(c, userLogin)
+	config, db, err := preHandlerUser(c, userLogin)
 	if err != nil {
 		return err
 	}
 
-	message, hermesError := controllers.AddUser(db, userLogin)
+	message, hermesError := controllers.AddUser(db, config, userLogin)
 	if hermesError != nil {
 		hermesError.LogPrivate()
 		return hermesError

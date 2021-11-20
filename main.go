@@ -12,8 +12,8 @@ func health(c *fiber.Ctx) error {
 	return c.SendString("ok")
 }
 
-func initDB() error {
-	db, hermesError := utils.Connection()
+func initDB(config *models.DBConfig) error {
+	db, hermesError := utils.Connection(config)
 	if hermesError != nil {
 		return hermesError
 	}
@@ -35,7 +35,12 @@ func getApp() *fiber.App {
 }
 
 func main() {
-	err := initDB()
+	config, err := models.GetConfig()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	err = initDB(&config.DBConfig)
 	if err != nil {
 		log.Panic(err)
 	}

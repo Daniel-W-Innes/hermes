@@ -11,15 +11,20 @@ import (
 )
 
 func preHandlerMessage(c *fiber.Ctx, message *models.Message) (*gorm.DB, uint, hermesErrors.HermesError) {
-	authorization := c.Get(fiber.HeaderAuthorization)
-	userId, err := utils.ValidateAuth(authorization)
+	config, err := models.GetConfig()
 	if err != nil {
-		return nil, 0, err.Wrap("failed on pre handler for message\n")
+		return nil, 0, hermesErrors.InternalServerError(fmt.Sprintf("failed to get config %s\n", err))
 	}
 
-	db, err := utils.Connection()
-	if err != nil {
-		return nil, 0, err.Wrap("failed on pre handler for message")
+	authorization := c.Get(fiber.HeaderAuthorization)
+	userId, hermesError := utils.ValidateAuth(&config.JWTConfig, authorization)
+	if hermesError != nil {
+		return nil, 0, hermesError.Wrap("failed on pre handler for message\n")
+	}
+
+	db, hermesError := utils.Connection(&config.DBConfig)
+	if hermesError != nil {
+		return nil, 0, hermesError.Wrap("failed on pre handler for message\n")
 	}
 
 	if message != nil {
@@ -38,12 +43,18 @@ func preHandlerMessage(c *fiber.Ctx, message *models.Message) (*gorm.DB, uint, h
 
 func addMessage(c *fiber.Ctx) error {
 	message := new(models.Message)
-	db, userId, err := preHandlerMessage(c, message)
-	if err != nil {
-		return err
+	db, userId, hermesError := preHandlerMessage(c, message)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 
-	return c.JSON(controllers.AddMessage(db, message, userId))
+	output, hermesError := controllers.AddMessage(db, message, userId)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
+	}
+	return c.JSON(output)
 }
 
 func deleteMessage(c *fiber.Ctx) error {
@@ -52,27 +63,31 @@ func deleteMessage(c *fiber.Ctx) error {
 		return err
 	}
 
-	db, userId, err := preHandlerMessage(c, nil)
-	if err != nil {
-		return err
+	db, userId, hermesError := preHandlerMessage(c, nil)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 
-	message, err := controllers.DeleteMessage(db, messageId, userId)
-	if err != nil {
-		return err
+	message, hermesError := controllers.DeleteMessage(db, messageId, userId)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 	return c.JSON(message)
 }
 
 func getMessages(c *fiber.Ctx) error {
-	db, userId, err := preHandlerMessage(c, nil)
-	if err != nil {
-		return err
+	db, userId, hermesError := preHandlerMessage(c, nil)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 
-	message, err := controllers.GetMessages(db, userId)
-	if err != nil {
-		return err
+	message, hermesError := controllers.GetMessages(db, userId)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 	return c.JSON(message)
 }
@@ -83,14 +98,16 @@ func getMessage(c *fiber.Ctx) error {
 		return err
 	}
 
-	db, userId, err := preHandlerMessage(c, nil)
-	if err != nil {
-		return err
+	db, userId, hermesError := preHandlerMessage(c, nil)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 
-	message, err := controllers.GetMessage(db, messageId, userId)
-	if err != nil {
-		return err
+	message, hermesError := controllers.GetMessage(db, messageId, userId)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 	return c.JSON(message)
 }
@@ -101,14 +118,16 @@ func editMessage(c *fiber.Ctx) error {
 		return err
 	}
 
-	db, userId, err := preHandlerMessage(c, nil)
-	if err != nil {
-		return err
+	db, userId, hermesError := preHandlerMessage(c, nil)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 
-	message, err := controllers.EditMessage(db, c.BodyParser, messageId, userId)
-	if err != nil {
-		return err
+	message, hermesError := controllers.EditMessage(db, c.BodyParser, messageId, userId)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 	return c.JSON(message)
 }

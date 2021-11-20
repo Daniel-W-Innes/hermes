@@ -25,12 +25,12 @@ func preHash(password []byte, pepperKey []byte) []byte {
 	return []byte(base64.StdEncoding.EncodeToString(hashedPassword.Sum(nil)))
 }
 
-func (u *User) CheckPassword(password []byte) error {
-	return bcrypt.CompareHashAndPassword(u.PasswordKey, preHash(password, config.PasswordConfig.PepperKey))
+func (u *User) CheckPassword(passwordConfig *PasswordConfig, password []byte) error {
+	return bcrypt.CompareHashAndPassword(u.PasswordKey, preHash(password, passwordConfig.PepperKey))
 }
 
-func (u *User) SetPassword(password []byte) error {
-	passwordKey, err := bcrypt.GenerateFromPassword(preHash(password, config.PasswordConfig.PepperKey), config.PasswordConfig.BcryptCost)
+func (u *User) SetPassword(passwordConfig *PasswordConfig, password []byte) error {
+	passwordKey, err := bcrypt.GenerateFromPassword(preHash(password, passwordConfig.PepperKey), passwordConfig.BcryptCost)
 	if err != nil {
 		return err
 	}
@@ -38,13 +38,13 @@ func (u *User) SetPassword(password []byte) error {
 	return nil
 }
 
-func (u *User) GenerateJWT() (*JWT, error) {
+func (u *User) GenerateJWT(jwtConfig *JWTConfig) (*JWT, error) {
 	claims := jwt.MapClaims{}
 	claims["sub"] = u.ID
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 
-	accessToken, err := token.SignedString(config.JWTConfig.PrivateKey)
+	accessToken, err := token.SignedString(&jwtConfig.PrivateKey)
 	if err != nil {
 		return &JWT{}, err
 	}

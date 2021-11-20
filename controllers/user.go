@@ -10,7 +10,7 @@ import (
 func Login(db *gorm.DB, config *models.Config, userLogin *models.UserLogin) (*models.JWT, hermesErrors.HermesError) {
 	var user models.User
 
-	db.Where("username = ?", userLogin.Username).Select("password_key", "id").First(&user)
+	db.Where("username = ?", userLogin.Username).First(&user)
 
 	if err := user.CheckPassword(&config.PasswordConfig, []byte(userLogin.Password)); err != nil {
 		return nil, hermesErrors.BadLogin()

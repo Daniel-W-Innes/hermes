@@ -16,15 +16,18 @@ type Message struct {
 	Recipients []User `gorm:"many2many:recipients;"`
 }
 
+// isPalindrome check if a string is a palindrome
 func isPalindrome(s string) bool {
 	palindrome := true
 	numC := len(s)
+	//check string from both ends
 	for i := 0; i < numC/2; i++ {
 		palindrome = palindrome && s[i] == s[numC-i-1]
 	}
 	return palindrome
 }
 
+// Check check all word play types
 func (m *Message) Check() {
 	m.Palindrome = isPalindrome(m.Text)
 }

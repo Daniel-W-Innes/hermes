@@ -35,38 +35,34 @@ func DeleteMessage(db *gorm.DB, messageId int, userId uint) (fiber.Map, hermesEr
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to delete message: %s\n", result.Error))
 	}
 
+	//check if no row were removed
 	if result.RowsAffected == 0 {
 		return nil, hermesErrors.MessageDoesNotExits()
 	}
 	return fiber.Map{"result": "message deleted"}, nil
 }
 
-// GetMessages get all
+// GetMessages get all messages owned by or sent to the user
 func GetMessages(db *gorm.DB, userId uint) (fiber.Map, hermesErrors.HermesError) {
 	var messages []models.Message
-	var messagesFromAssociation []models.Message
 
-	result := db.Where("owner_id = ?", userId).Find(&messages)
+	//get messages by the user from db
+	result := db.Joins("LEFT JOIN recipients (user_id) ON recipients.user_id=message.owner_id").Where("owner_id = ?", userId).Find(&messages)
 	if result.Error != nil {
-		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get owned messages %s\n", result.Error))
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get messages %s\n", result.Error))
 	}
-
-	err := db.Model(&models.Message{}).Where("id = ?", userId).Association("Recipients").Find(&messagesFromAssociation)
-	if err != nil {
-		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get messages by recipients %s\n", result.Error))
-	}
-	copy(messages[len(messages):], messagesFromAssociation)
 
 	return fiber.Map{"messages": messages}, nil
 }
 
+// GetMessage get a messages owned by user
 func GetMessage(db *gorm.DB, messageId int, userId uint) (*models.Message, hermesErrors.HermesError) {
 	var message models.Message
 
-	result := db.Where("id = ?", messageId).Where("owner_id = ?", userId).Limit(1).Find(&message)
+	result := db.Joins("LEFT JOIN recipients (user_id) ON recipients.user_id=message.owner_id").Where("id = ?", messageId).Where("owner_id = ?", userId).Limit(1).Find(&message)
 
 	if result.Error != nil {
-		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to delete message: %s\n", result.Error))
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get message: %s\n", result.Error))
 	}
 	if result.RowsAffected == 0 {
 		return nil, hermesErrors.MessageDoesNotExits()

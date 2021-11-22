@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-//preHandlerMessage standard handler setup get message from body message par is not nil
+// preHandlerMessage standard handler setup get message from body message par is not nil
 func preHandlerMessage(c *fiber.Ctx, message *models.Message) (*gorm.DB, uint, hermesErrors.HermesError) {
 	config, err := models.GetConfig()
 	if err != nil {

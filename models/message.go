@@ -27,7 +27,7 @@ func isPalindrome(s string) bool {
 	return palindrome
 }
 
-// Check check all word play types
+// Check all word play types
 func (m *Message) Check() {
 	m.Palindrome = isPalindrome(m.Text)
 }

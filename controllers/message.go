@@ -47,7 +47,7 @@ func GetMessages(db *gorm.DB, userId uint) (fiber.Map, hermesErrors.HermesError)
 	var messages []models.Message
 
 	//get messages by the user from db
-	result := db.Joins("LEFT JOIN recipients (user_id) ON recipients.user_id=message.owner_id").Where("owner_id = ?", userId).Find(&messages)
+	result := db.Joins("LEFT JOIN recipients r ON messages.id = r.message_id").Where("r.user_id = ?", userId).Or("owner_id = ?", userId).Find(&messages)
 	if result.Error != nil {
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get messages %s\n", result.Error))
 	}
@@ -59,7 +59,7 @@ func GetMessages(db *gorm.DB, userId uint) (fiber.Map, hermesErrors.HermesError)
 func GetMessage(db *gorm.DB, messageId int, userId uint) (*models.Message, hermesErrors.HermesError) {
 	var message models.Message
 
-	result := db.Joins("LEFT JOIN recipients (user_id) ON recipients.user_id=message.owner_id").Where("id = ?", messageId).Where("owner_id = ?", userId).Limit(1).Find(&message)
+	result := db.Joins("LEFT JOIN recipients r ON messages.id = r.message_id").Where("id = ?", messageId).Where(db.Where("r.user_id = ?", userId).Or("owner_id = ?", userId)).Limit(1).Find(&message)
 
 	if result.Error != nil {
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get message: %s\n", result.Error))

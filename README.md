@@ -8,7 +8,7 @@ is built on the Fiber framework.
 
 ## Architecture
 
-[Generic flow for all routes](./docs/genericFlow.png)
+![Generic flow for all routes](./docs/genericFlow.png)
 
 ## Building and Deployment
 

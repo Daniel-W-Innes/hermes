@@ -10,16 +10,20 @@ import (
 	"gorm.io/gorm"
 )
 
+// preHandlerUser standard handler setup
 func preHandlerUser(c *fiber.Ctx, userLogin *models.UserLogin) (*models.Config, *gorm.DB, hermesErrors.HermesError) {
 	config, err := models.GetConfig()
 	if err != nil {
 		return nil, nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get config %s\n", err))
 	}
 
+	// open db connection
 	db, err := utils.Connection(&config.DBConfig)
 	if err != nil {
 		return nil, nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to connect to db: %s\n", err)).Wrap("failed on pre handler for user\n")
 	}
+
+	// get user input from body
 	if err := c.BodyParser(userLogin); err != nil {
 		return nil, nil, hermesErrors.UnprocessableEntity(fmt.Sprintf("failed to parser user input: %s\n", err)).Wrap("failed on pre handler for user\n")
 	}

@@ -9,27 +9,39 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// AddMessage add a new message and check all word play types
 func AddMessage(db *gorm.DB, message *models.Message, userId uint) (interface{}, hermesErrors.HermesError) {
+	// ensure the OwnerID matches the userId from the auth
 	message.OwnerID = userId
+
+	// check all word play types
 	message.Check()
-	result := db.Clauses(clause.Returning{}).Save(message)
+
+	// create message in db
+	result := db.Clauses(clause.Returning{}).Create(message)
 	if result.Error != nil {
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to add message %s\n", result.Error))
 	}
+
+	// return message id for get, delete and edit calls
 	return fiber.Map{"id": message.ID}, nil
 }
 
+// DeleteMessage delete a message by id
 func DeleteMessage(db *gorm.DB, messageId int, userId uint) (fiber.Map, hermesErrors.HermesError) {
+	// delete the message and specify owner_id prevent from deleting other users message
 	result := db.Where("id = ?", messageId).Where("owner_id = ?", userId).Delete(&models.Message{})
 	if result.Error != nil {
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to delete message: %s\n", result.Error))
 	}
+
 	if result.RowsAffected == 0 {
 		return nil, hermesErrors.MessageDoesNotExits()
 	}
 	return fiber.Map{"result": "message deleted"}, nil
 }
 
+// GetMessages get all
 func GetMessages(db *gorm.DB, userId uint) (fiber.Map, hermesErrors.HermesError) {
 	var messages []models.Message
 	var messagesFromAssociation []models.Message

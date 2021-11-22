@@ -5,10 +5,12 @@ import (
 	"github.com/go-playground/validator"
 )
 
+// Validate user input, checks if the inputted model passes the 'validate' tags
 func Validate(s interface{}) hermesErrors.HermesError {
 	var errors []*hermesErrors.ValidatorError
 	validate := validator.New()
 	errs := validate.Struct(s)
+	// build ValidatorError from the errors outputted by validate
 	if errs != nil {
 		for _, err := range errs.(validator.ValidationErrors) {
 			errors = append(errors, &hermesErrors.ValidatorError{
@@ -17,6 +19,7 @@ func Validate(s interface{}) hermesErrors.HermesError {
 				Value: err.Param(),
 			})
 		}
+		// build ValidatorErrors into a hermesError
 		return hermesErrors.FailedValidation(errors)
 	}
 	return nil

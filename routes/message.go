@@ -10,12 +10,14 @@ import (
 	"gorm.io/gorm"
 )
 
+//preHandlerMessage standard handler setup get message from body message par is not nil
 func preHandlerMessage(c *fiber.Ctx, message *models.Message) (*gorm.DB, uint, hermesErrors.HermesError) {
 	config, err := models.GetConfig()
 	if err != nil {
 		return nil, 0, hermesErrors.InternalServerError(fmt.Sprintf("failed to get config %s\n", err))
 	}
 
+	// check user authorization from authorization header
 	authorization := c.Get(fiber.HeaderAuthorization)
 	userId, hermesError := utils.ValidateAuth(&config.JWTConfig, authorization)
 	if hermesError != nil {
@@ -27,11 +29,13 @@ func preHandlerMessage(c *fiber.Ctx, message *models.Message) (*gorm.DB, uint, h
 		return nil, 0, hermesError.Wrap("failed on pre handler for message\n")
 	}
 
+	// get user input from body if a destination is provided for it
 	if message != nil {
 		if err := c.BodyParser(message); err != nil {
 			return nil, 0, hermesErrors.UnprocessableEntity(fmt.Sprintf("failed to parser user input: %s\n", err)).Wrap("failed on pre handler for message\n")
 		}
 
+		// validate user inputted message
 		err := utils.Validate(message)
 		if err != nil {
 			return nil, 0, err.Wrap("failed on pre handler for message\n")

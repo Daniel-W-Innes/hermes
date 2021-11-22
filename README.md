@@ -8,7 +8,7 @@ is built on the Fiber framework.
 
 ## Architecture
 
-[Generic flow for all routes](https://github.com/Daniel-W-Innes/hermes/blob/main//../../../../../../docs/genericFlow.png?raw=true)
+[Generic flow for all routes](./docs/genericFlow.png)
 
 ## Building and Deployment
 

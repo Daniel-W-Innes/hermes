@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+
 	"github.com/Daniel-W-Innes/hermes/hermesErrors"
 	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/gofiber/fiber/v2"
@@ -46,8 +47,8 @@ func DeleteMessage(db *gorm.DB, messageId int, userId uint) (fiber.Map, hermesEr
 func GetMessages(db *gorm.DB, userId uint) (fiber.Map, hermesErrors.HermesError) {
 	var messages []models.Message
 
-	//get messages by the user from db
-	result := db.Joins("LEFT JOIN recipients r ON messages.id = r.message_id").Where("r.user_id = ?", userId).Or("owner_id = ?", userId).Find(&messages)
+	//get messages from db where user is owner or a recipient
+	result := db.Joins("LEFT JOIN recipients (user_id) ON recipients.user_id=message.owner_id").Where("owner_id = ?", userId).Find(&messages)
 	if result.Error != nil {
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get messages %s\n", result.Error))
 	}
@@ -59,20 +60,24 @@ func GetMessages(db *gorm.DB, userId uint) (fiber.Map, hermesErrors.HermesError)
 func GetMessage(db *gorm.DB, messageId int, userId uint) (*models.Message, hermesErrors.HermesError) {
 	var message models.Message
 
-	result := db.Joins("LEFT JOIN recipients r ON messages.id = r.message_id").Where("id = ?", messageId).Where(db.Where("r.user_id = ?", userId).Or("owner_id = ?", userId)).Limit(1).Find(&message)
-
+	//get message from db where user is owner or a recipient
+	result := db.Joins("LEFT JOIN recipients (user_id) ON recipients.user_id=message.owner_id").Where("id = ?", messageId).Where("owner_id = ?", userId).Limit(1).Find(&message)
 	if result.Error != nil {
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get message: %s\n", result.Error))
 	}
+
+	//if message was found, note messages that the user does not have permissions to see will result in this as well
 	if result.RowsAffected == 0 {
 		return nil, hermesErrors.MessageDoesNotExits()
 	}
 	return &message, nil
 }
 
+// EditMessage update message with user input only if the message is owned by the user
 func EditMessage(db *gorm.DB, updateMessage func(out interface{}) error, messageId int, userId uint) (*models.Message, hermesErrors.HermesError) {
 	var message models.Message
 
+	//get message from db where user is owner
 	result := db.Where("id = ?", messageId).Where("owner_id = ?", userId).Limit(1).Find(&message)
 	if result.Error != nil {
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to delete message: %s\n", result.Error))
@@ -81,12 +86,15 @@ func EditMessage(db *gorm.DB, updateMessage func(out interface{}) error, message
 		return nil, hermesErrors.MessageDoesNotExits()
 	}
 
+	//update message using callback to isolate api
 	if err := updateMessage(&message); err != nil {
 		return nil, hermesErrors.UnprocessableEntity(fmt.Sprintf("failed to update message with user input: %s\n", err))
 	}
 
+	//redo check in case text is changed
 	message.Check()
 
+	//save changes to the db
 	result = db.Save(&message)
 	if result.Error != nil {
 		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to update message %s\n", result.Error))

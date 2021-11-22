@@ -1,0 +1,19 @@
+@startuml Generic flow for all routes
+
+actor User
+participant Router
+participant Controller
+participant DAO
+participant Model
+
+User -> Router ++
+Router -> DAO ** : create
+Router -> Controller ++
+Controller -> Model ** : create
+note over Controller, DAO
+    Execute business logic
+end note
+return
+return
+
+@enduml

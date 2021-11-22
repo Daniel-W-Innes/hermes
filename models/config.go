@@ -14,9 +14,9 @@ import (
 var lock = &sync.Mutex{}
 
 type Config struct {
-	DBConfig       *DBConfig
-	JWTConfig      *JWTConfig
-	PasswordConfig *PasswordConfig
+	DBConfig       DBConfig
+	JWTConfig      JWTConfig
+	PasswordConfig PasswordConfig
 }
 
 var config *Config
@@ -26,25 +26,25 @@ func GetConfig() (*Config, error) {
 		lock.Lock()
 		defer lock.Unlock()
 		if config == nil {
-			var dbConfig DBConfig
+			dbConfig := DBConfig{}
 			err := dbConfig.getConfigFromENV()
 			if err != nil {
 				return &Config{}, err
 			}
 
-			var jwtConfig JWTConfig
+			jwtConfig := JWTConfig{}
 			err = jwtConfig.getConfigFromENV()
 			if err != nil {
 				return &Config{}, err
 			}
 
-			var passwordConfig PasswordConfig
+			passwordConfig := PasswordConfig{}
 			err = passwordConfig.getConfigFromENV()
 			if err != nil {
 				return &Config{}, err
 			}
 
-			config = &Config{DBConfig: &dbConfig, JWTConfig: &jwtConfig, PasswordConfig: &passwordConfig}
+			config = &Config{DBConfig: dbConfig, JWTConfig: jwtConfig, PasswordConfig: passwordConfig}
 		}
 	}
 	return config, nil
@@ -114,8 +114,8 @@ func (c *DBConfig) GetPsqlConn() string {
 }
 
 type JWTConfig struct {
-	PrivateKey *ecdsa.PrivateKey
-	PublicKey  *ecdsa.PublicKey
+	PrivateKey ecdsa.PrivateKey
+	PublicKey  ecdsa.PublicKey
 }
 
 func (c *JWTConfig) getConfigFromENV() error {
@@ -128,7 +128,7 @@ func (c *JWTConfig) getConfigFromENV() error {
 	if err != nil {
 		return err
 	}
-	c.PrivateKey = privateKey
+	c.PrivateKey = *privateKey
 
 	publ, err := getVarFromFileOrENV("JWT_PUBLIC_KEY")
 	if err != nil {
@@ -139,7 +139,7 @@ func (c *JWTConfig) getConfigFromENV() error {
 	if err != nil {
 		return err
 	}
-	c.PublicKey = publicKey
+	c.PublicKey = *publicKey
 	return nil
 }
 

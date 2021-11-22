@@ -1,181 +1,134 @@
 package routes
 
 import (
-	"database/sql"
-	"errors"
 	"fmt"
+	"github.com/Daniel-W-Innes/hermes/controllers"
+	"github.com/Daniel-W-Innes/hermes/hermesErrors"
 	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/Daniel-W-Innes/hermes/utils"
 	"github.com/gofiber/fiber/v2"
-	"github.com/lib/pq"
-	"log"
-	"strconv"
+	"gorm.io/gorm"
 )
 
-var MissingMessageID = errors.New("missing message id in prams")
-
-func addMessage(c *fiber.Ctx) error {
-	messageBundle := new(models.MessageBundle)
-
-	if err := c.BodyParser(messageBundle); err != nil {
-		return err
-	}
-
-	err := utils.Validate(messageBundle)
+func preHandlerMessage(c *fiber.Ctx, message *models.Message) (*gorm.DB, uint, hermesErrors.HermesError) {
+	config, err := models.GetConfig()
 	if err != nil {
-		return err
-	}
-
-	db, err := utils.Connection()
-	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return fiber.ErrInternalServerError
+		return nil, 0, hermesErrors.InternalServerError(fmt.Sprintf("failed to get config %s\n", err))
 	}
 
 	authorization := c.Get(fiber.HeaderAuthorization)
-	userId, err := utils.ValidateAuth(authorization)
-	if err != nil {
-		return err
+	userId, hermesError := utils.ValidateAuth(&config.JWTConfig, authorization)
+	if hermesError != nil {
+		return nil, 0, hermesError.Wrap("failed on pre handler for message\n")
 	}
 
-	messageBundle.Message.OwnerID = userId
+	db, hermesError := utils.Connection(&config.DBConfig)
+	if hermesError != nil {
+		return nil, 0, hermesError.Wrap("failed on pre handler for message\n")
+	}
 
-	messageBundle.Message.Check()
-
-	id, err := messageBundle.Insert(db)
-	if err != nil {
-		if err.(*pq.Error).Code.Name() == "foreign_key_violation" {
-			if err.(*pq.Error).Constraint == "recipient_recipient_id_fkey" {
-				return fiber.NewError(fiber.StatusBadRequest, "not valid recipient")
-			} else {
-				return fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("not valid owner %d this should not be possible", userId))
-			}
+	if message != nil {
+		if err := c.BodyParser(message); err != nil {
+			return nil, 0, hermesErrors.UnprocessableEntity(fmt.Sprintf("failed to parser user input: %s\n", err)).Wrap("failed on pre handler for message\n")
 		}
-		log.Printf("failed to insert messag: %s\n", err)
-		return fiber.ErrInternalServerError
+
+		err := utils.Validate(message)
+		if err != nil {
+			return nil, 0, err.Wrap("failed on pre handler for message\n")
+		}
+
 	}
-	return c.JSON(fiber.Map{"id": id})
+	return db, userId, nil
+}
+
+func addMessage(c *fiber.Ctx) error {
+	message := new(models.Message)
+	db, userId, hermesError := preHandlerMessage(c, message)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
+	}
+
+	output, hermesError := controllers.AddMessage(db, message, userId)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
+	}
+	return c.JSON(output)
 }
 
 func deleteMessage(c *fiber.Ctx) error {
-	messageId, err := strconv.Atoi(c.Query("id"))
-	if err != nil {
-		return MissingMessageID
-	}
-
-	db, err := utils.Connection()
-	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-
-	authorization := c.Get(fiber.HeaderAuthorization)
-	userId, err := utils.ValidateAuth(authorization)
+	messageId, err := c.ParamsInt("id")
 	if err != nil {
 		return err
 	}
 
-	message := models.Message{ID: messageId, OwnerID: userId}
+	db, userId, hermesError := preHandlerMessage(c, nil)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
+	}
 
-	affected, err := message.Delete(db)
-	if err != nil {
-		log.Printf("failed to delete message: %s\n", err)
-		return fiber.ErrInternalServerError
+	message, hermesError := controllers.DeleteMessage(db, messageId, userId)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
-	if affected == 0 {
-		return fiber.NewError(fiber.StatusBadRequest, "message does not exits or token is not the owner")
-	}
-	return c.SendString("message deleted")
+	return c.JSON(message)
 }
 
 func getMessages(c *fiber.Ctx) error {
-	messageBundle := models.MessageBundle{}
+	db, userId, hermesError := preHandlerMessage(c, nil)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
+	}
 
-	authorization := c.Get(fiber.HeaderAuthorization)
-	userId, err := utils.ValidateAuth(authorization)
+	message, hermesError := controllers.GetMessages(db, userId)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
+	}
+	return c.JSON(message)
+}
+
+func getMessage(c *fiber.Ctx) error {
+	messageId, err := c.ParamsInt("id")
 	if err != nil {
 		return err
 	}
-	messageBundle.Message.OwnerID = userId
-	messageIdStr := c.Query("id")
-	if messageIdStr != "" {
-		messageId, err := strconv.Atoi(messageIdStr)
-		if err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "message id need to a int")
-		}
 
-		messageBundle.Message.ID = messageId
-		return getMessage(c, &messageBundle)
+	db, userId, hermesError := preHandlerMessage(c, nil)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 
-	db, err := utils.Connection()
-	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return fiber.ErrInternalServerError
+	message, hermesError := controllers.GetMessage(db, messageId, userId)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
-
-	messageBundles, err := messageBundle.GetAll(db, true)
-	if err != nil {
-		log.Printf("failed to get messages %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-	return c.JSON(fiber.Map{
-		"messages": messageBundles,
-	})
-}
-
-func getMessage(c *fiber.Ctx, messageBundle *models.MessageBundle) error {
-	db, err := utils.Connection()
-	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-
-	err = messageBundle.Get(db, true)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return fiber.NewError(fiber.StatusNotFound, "message not found")
-		}
-		log.Printf("failed to get message %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-	return c.JSON(messageBundle)
+	return c.JSON(message)
 }
 
 func editMessage(c *fiber.Ctx) error {
-	messageId, err := strconv.Atoi(c.Query("id"))
-	if err != nil {
-		return MissingMessageID
-	}
-
-	db, err := utils.Connection()
-	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-
-	authorization := c.Get(fiber.HeaderAuthorization)
-	userId, err := utils.ValidateAuth(authorization)
+	messageId, err := c.ParamsInt("id")
 	if err != nil {
 		return err
 	}
 
-	message := models.Message{ID: messageId, OwnerID: userId}
-
-	err = message.Get(db, false)
-
-	if err := c.BodyParser(&message); err != nil {
-		return err
+	db, userId, hermesError := preHandlerMessage(c, nil)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
 
-	message.Check()
-
-	err = message.Update(db)
-	if err != nil {
-		log.Printf("failed to update message %s\n", err)
-		return fiber.ErrInternalServerError
+	message, hermesError := controllers.EditMessage(db, c.BodyParser, messageId, userId)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
-
 	return c.JSON(message)
 }
 
@@ -183,7 +136,8 @@ func Message(app *fiber.App) {
 	route := app.Group("/message")
 
 	route.Post("", addMessage)
-	route.Delete("", deleteMessage)
+	route.Delete("/:id", deleteMessage)
 	route.Get("", getMessages)
-	route.Patch("", editMessage)
+	route.Get("/:id", getMessage)
+	route.Post("/:id", editMessage)
 }

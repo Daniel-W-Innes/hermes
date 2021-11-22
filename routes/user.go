@@ -1,105 +1,65 @@
 package routes
 
 import (
-	"database/sql"
-	"errors"
+	"fmt"
+	"github.com/Daniel-W-Innes/hermes/controllers"
+	"github.com/Daniel-W-Innes/hermes/hermesErrors"
 	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/Daniel-W-Innes/hermes/utils"
 	"github.com/gofiber/fiber/v2"
-	"log"
+	"gorm.io/gorm"
 )
 
-var BadLogin = fiber.NewError(fiber.StatusUnauthorized, "username or password is not right")
-var UserExists = fiber.NewError(fiber.StatusBadRequest, "user already exists")
+func preHandlerUser(c *fiber.Ctx, userLogin *models.UserLogin) (*models.Config, *gorm.DB, hermesErrors.HermesError) {
+	config, err := models.GetConfig()
+	if err != nil {
+		return nil, nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get config %s\n", err))
+	}
+
+	db, err := utils.Connection(&config.DBConfig)
+	if err != nil {
+		return nil, nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to connect to db: %s\n", err)).Wrap("failed on pre handler for user\n")
+	}
+	if err := c.BodyParser(userLogin); err != nil {
+		return nil, nil, hermesErrors.UnprocessableEntity(fmt.Sprintf("failed to parser user input: %s\n", err)).Wrap("failed on pre handler for user\n")
+	}
+
+	hermesError := utils.Validate(userLogin)
+	if hermesError != nil {
+		return nil, nil, hermesError.Wrap("failed on pre handler for user\n")
+	}
+
+	return config, db, nil
+}
 
 func login(c *fiber.Ctx) error {
 	userLogin := new(models.UserLogin)
-
-	if err := c.BodyParser(userLogin); err != nil {
-		return err
-	}
-
-	err := utils.Validate(userLogin)
+	config, db, err := preHandlerUser(c, userLogin)
 	if err != nil {
 		return err
 	}
 
-	db, err := utils.Connection()
-	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return fiber.ErrInternalServerError
+	message, hermesError := controllers.Login(db, config, userLogin)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
-
-	user := models.User{Username: userLogin.Username}
-	err = user.Get(db)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return BadLogin
-		}
-		log.Printf("failed to get user: %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-
-	if err = user.CheckPassword([]byte(userLogin.Password)); err != nil {
-		return BadLogin
-	}
-
-	jwt, err := user.GenerateJWT()
-	if err != nil {
-		log.Printf("failed to generate jwt: %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-
-	return c.JSON(jwt)
+	return c.JSON(message)
 }
 
 func addUser(c *fiber.Ctx) error {
 	userLogin := new(models.UserLogin)
-
-	if err := c.BodyParser(userLogin); err != nil {
-		return err
-	}
-
-	err := utils.Validate(userLogin)
+	config, db, err := preHandlerUser(c, userLogin)
 	if err != nil {
 		return err
 	}
 
-	db, err := utils.Connection()
-	if err != nil {
-		log.Printf("failed to connect to db: %s\n", err)
-		return fiber.ErrInternalServerError
+	message, hermesError := controllers.AddUser(db, config, userLogin)
+	if hermesError != nil {
+		hermesError.LogPrivate()
+		return hermesError
 	}
-
-	user := models.User{Username: userLogin.Username}
-	err = user.Get(db)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			user = models.User{
-				Username: userLogin.Username,
-			}
-			err = user.SetPassword([]byte(userLogin.Password))
-			if err != nil {
-				log.Printf("failed to hash pass: %s\n", err)
-				return fiber.ErrInternalServerError
-			}
-			err = user.Insert(db)
-			if err != nil {
-				log.Printf("failed to insert user: %s\n", err)
-				return fiber.ErrInternalServerError
-			}
-
-			jwt, err := user.GenerateJWT()
-			if err != nil {
-				log.Printf("failed to generate jwt: %s\n", err)
-				return fiber.ErrInternalServerError
-			}
-			return c.JSON(jwt)
-		}
-		log.Printf("failed to get user: %s\n", err)
-		return fiber.ErrInternalServerError
-	}
-	return UserExists
+	return c.JSON(message)
 }
 
 func User(app *fiber.App) {

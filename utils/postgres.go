@@ -1,25 +1,25 @@
 package utils
 
 import (
+	"fmt"
+	"github.com/Daniel-W-Innes/hermes/hermesErrors"
 	"github.com/Daniel-W-Innes/hermes/models"
-	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-func Connection() (*sqlx.DB, error) {
-
-	config, err := models.GetConfig()
+func Connection(config *models.DBConfig) (*gorm.DB, hermesErrors.HermesError) {
+	db, err := gorm.Open(postgres.Open(config.GetPsqlConn()), &gorm.Config{PrepareStmt: true})
 	if err != nil {
-		return nil, err
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to initialize db session: %s\n", err))
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to get generic database interface: %s\n", err))
 	}
 
-	db, err := sqlx.Connect("postgres", config.DBConfig.GetPsqlConn())
-	if err != nil {
-		return nil, err
-	}
-
-	db.SetMaxOpenConns(config.DBConfig.MaxOpenConns)
-	db.SetMaxIdleConns(config.DBConfig.MaxIdleConns)
+	sqlDB.SetMaxOpenConns(config.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(config.MaxIdleConns)
 
 	return db, nil
 }

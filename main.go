@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/Daniel-W-Innes/hermes/routes"
 	"github.com/Daniel-W-Innes/hermes/utils"
 	"github.com/gofiber/fiber/v2"
@@ -11,16 +12,12 @@ func health(c *fiber.Ctx) error {
 	return c.SendString("ok")
 }
 
-func initDB() error {
-	db, err := utils.Connection()
-	if err != nil {
-		return err
+func initDB(config *models.DBConfig) error {
+	db, hermesError := utils.Connection(config)
+	if hermesError != nil {
+		return hermesError
 	}
-	tx := db.MustBegin()
-	tx.MustExec("CREATE TABLE IF NOT EXISTS app_user(id SERIAL PRIMARY KEY NOT NULL, username VARCHAR UNIQUE NOT NULL, password_key BYTEA NOT NULL )")
-	tx.MustExec("CREATE TABLE IF NOT EXISTS message(id SERIAL PRIMARY KEY NOT NULL, owner_id INT REFERENCES app_user(id), text TEXT NOT NULL, palindrome BOOL NOT NULL)")
-	tx.MustExec("CREATE TABLE IF NOT EXISTS recipient(message_id INT REFERENCES message(id), recipient_id INT REFERENCES app_user(id))")
-	err = tx.Commit()
+	err := db.AutoMigrate(&models.Message{}, &models.User{})
 	if err != nil {
 		return err
 	}
@@ -38,7 +35,12 @@ func getApp() *fiber.App {
 }
 
 func main() {
-	err := initDB()
+	config, err := models.GetConfig()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	err = initDB(&config.DBConfig)
 	if err != nil {
 		log.Panic(err)
 	}

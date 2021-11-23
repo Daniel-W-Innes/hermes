@@ -3,14 +3,14 @@
 actor User
 participant Router
 participant Controller
-participant DAO
+participant "Database connection" as db
 participant Model
 
 User -> Router ++
-Router -> DAO ** : create
+Router -> db ** : create
 Router -> Controller ++
 Controller -> Model ** : create
-note over Controller, DAO
+note over Controller, db
     Execute business logic
 end note
 return

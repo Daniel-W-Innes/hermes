@@ -1,0 +1,19 @@
+@startuml Generic flow for all routes
+
+actor User
+participant Router
+participant Controller
+participant "Database connection" as db
+participant Model
+
+User -> Router ++
+Router -> db ** : create
+Router -> Controller ++
+Controller -> Model ** : create
+note over Controller, db
+    Execute business logic
+end note
+return
+return
+
+@enduml

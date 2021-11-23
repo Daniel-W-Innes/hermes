@@ -21,6 +21,7 @@ type Config struct {
 
 var config *Config
 
+// GetConfig get singleton config and to load config from environment variables if necessary
 func GetConfig() (*Config, error) {
 	if config == nil {
 		lock.Lock()
@@ -60,7 +61,9 @@ type DBConfig struct {
 	MaxIdleConns int
 }
 
+// getVarFromFileOrENV load variable from a file if requested else from env
 func getVarFromFileOrENV(key string) (string, error) {
+	//check file name environment variable
 	fileName := os.Getenv(key + "_FILE")
 	if fileName != "" {
 		value, err := readFile(fileName)
@@ -109,6 +112,7 @@ func (c *DBConfig) getConfigFromENV() error {
 	return nil
 }
 
+//GetPsqlConn get postgresql formatted connection string from configuration
 func (c *DBConfig) GetPsqlConn() string {
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", c.host, c.port, c.user, c.password, c.dbname)
 }
@@ -143,6 +147,7 @@ func (c *JWTConfig) getConfigFromENV() error {
 	return nil
 }
 
+// readFile read entire file to bytes
 func readFile(fileName string) ([]byte, error) {
 	file, err := os.Open(fileName)
 	if err != nil {

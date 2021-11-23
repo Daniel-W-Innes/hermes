@@ -1,11 +1,12 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
-
 	"github.com/Daniel-W-Innes/hermes/hermesErrors"
 	"github.com/Daniel-W-Innes/hermes/models"
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -21,7 +22,23 @@ func AddMessage(db *gorm.DB, message *models.Message, userId uint) (interface{},
 	// create message in db
 	result := db.Clauses(clause.Returning{}).Create(message)
 	if result.Error != nil {
-		return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to add message %s\n", result.Error))
+		for errors.Unwrap(result.Error) != nil {
+			result.Error = errors.Unwrap(result.Error)
+		}
+		switch err := result.Error.(type) {
+		case *pgconn.PgError:
+			if err.Code == "23503" {
+				if err.ConstraintName == "fk_recipients_user" {
+					return nil, hermesErrors.RecipientDoesNotExits()
+				} else {
+					return nil, hermesErrors.OwnerDoesNotExits()
+				}
+			}
+		case hermesErrors.HermesError:
+			return nil, err
+		default:
+			return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to add message %s\n", result.Error))
+		}
 	}
 
 	// return message id for get, delete and edit calls

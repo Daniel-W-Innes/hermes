@@ -53,7 +53,10 @@ func AddUser(db *gorm.DB, config *models.Config, userLogin *models.UserLogin) (*
 		}
 
 		// create user in db
-		db.Create(&user)
+		result := db.Create(&user)
+		if result.Error != nil {
+			return nil, hermesErrors.InternalServerError(fmt.Sprintf("failed to create user: %s\n", result.Error))
+		}
 
 		// generate jwt for user
 		jwt, err := user.GenerateJWT(&config.JWTConfig)

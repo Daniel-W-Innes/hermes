@@ -176,6 +176,143 @@
           }
         }
       }
+    },
+    "/message/{id}": {
+      "get": {
+        "description": "get a specific message",
+        "tags": [
+          "message"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the requested messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "message does not exits or token is not the owner",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "description": "Edit a message",
+        "tags": [
+          "message"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the updated messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "message does not exits or token is not the owner",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "description": "Delete a message",
+        "tags": [
+          "message"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the message was deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "string",
+                      "example": "message deleted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "message does not exits or token is not the owner",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -203,27 +340,22 @@
       "Message": {
         "type": "object",
         "properties": {
-          "message": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "integer"
-              },
-              "owner_id": {
-                "type": "integer"
-              },
-              "text": {
-                "type": "string"
-              },
-              "palindrome": {
-                "type": "boolean"
-              }
-            }
+          "id": {
+            "type": "integer"
           },
-          "recipient_ids": {
+          "owner_id": {
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          },
+          "palindrome": {
+            "type": "boolean"
+          },
+          "recipients": {
             "type": "array",
             "items": {
-              "type": "integer"
+              "$ref": "#/components/schemas/User"
             }
           }
         }
@@ -233,6 +365,17 @@
         "properties": {
           "access_token": {
             "type": "string"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
           }
         }
       },

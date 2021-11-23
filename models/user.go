@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"github.com/Daniel-W-Innes/hermes/hermesErrors"
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -11,9 +12,16 @@ import (
 
 type User struct {
 	gorm.Model
-	Username    string
+	Username    string `gorm:"unique"`
 	PasswordKey []byte
 	Messages    []Message `gorm:"foreignKey:OwnerID"`
+}
+
+func (u *User) BeforeCreate(_ *gorm.DB) (err error) {
+	if u.Username == "" && string(u.PasswordKey) == "" {
+		return hermesErrors.RecipientDoesNotExits()
+	}
+	return
 }
 
 // preHash and encode the not hashed password

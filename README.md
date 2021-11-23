@@ -54,17 +54,24 @@ tests are not fully working. At the moment sqlmock is rolling back automatically
 
 ## Environment variables
 
-| Name | Type | Required | Description |--|--|--|--|--| | DB_HOST | String | Yes | Database server host | DB_PORT |
-Integer | Yes | Port number for database | MAX_OPEN_CONNS | Integer | Yes | Maximum number of open connections to the
-database | MAX_IDLE_CONNS | Integer | Yes | Maximum number of connections in the idle connection pool | DB_PASSWORD_FILE
-| File path | Yes | Password for the database | DB_PASSWORD | String | Alternative to DB_PASSWORD_FILE | Password for
-the database | DB_USER_FILE | File path | Yes | Username for database | DB_USER | String | Alternative to DB_USER_FILE |
-Username for database | DB_NAME | String | Yes | Name of the database | JWT_PRIVATE_KEY_FILE | File path | Yes | PEM
-encoded ecdsa private key | JWT_PUBLIC_KEY_FILE | File path | Yes | PEM encoded ecdsa public key | JWT_PRIVATE_KEY |
-String | Alternative to JWT_PRIVATE_KEY_FILE | PEM encoded ecdsa private key | JWT_PUBLIC_KEY | String | Alternative to
-JWT_PUBLIC_KEY_FILE | PEM encoded ecdsa public key | BCRYPT_COST | Integer | Yes | Number of key expansion rounds should
-be tuned to deployment hardware | PEPPER_KEY_FILE | File path | Yes | Pre-hash secret to prevent off-line decoding |
-PEPPER_KEY | String | Alternative to PEPPER_KEY_FILE | Pre-hash secret to prevent off-line decoding
+| Name | Type | Required | Description |
+|--|--|--|--|
+| DB_HOST | String | Yes | Database server host |
+| DB_PORT | Integer | Yes | Port number for database |
+| MAX_OPEN_CONNS | Integer | Yes | Maximum number of open connections to the database |
+| MAX_IDLE_CONNS | Integer | Yes | Maximum number of connections in the idle connection pool |
+| DB_PASSWORD_FILE | File path | Yes | Password for the database |
+| DB_PASSWORD | String | Alternative to DB_PASSWORD_FILE | Password for the database |
+| DB_USER_FILE | File path | Yes | Username for database |
+| DB_USER | String | Alternative to DB_USER_FILE | Username for database |
+| DB_NAME | String | Yes | Name of the database |
+| JWT_PRIVATE_KEY_FILE | File path | Yes | PEM encoded ecdsa private key |
+| JWT_PUBLIC_KEY_FILE | File path | Yes | PEM encoded ecdsa public key |
+| JWT_PRIVATE_KEY | String | Alternative to JWT_PRIVATE_KEY_FILE | PEM encoded ecdsa private key |
+| JWT_PUBLIC_KEY | String | Alternative to JWT_PUBLIC_KEY_FILE | PEM encoded ecdsa public key |
+| BCRYPT_COST | Integer | Yes | Number of key expansion rounds should be tuned to deployment hardware |
+| PEPPER_KEY_FILE | File path | Yes | Pre-hash secret to prevent off-line decoding |
+| PEPPER_KEY | String | Alternative to PEPPER_KEY_FILE | Pre-hash secret to prevent off-line decoding |
 
 ## TODO
 

@@ -354,14 +354,19 @@ func TestGetMessages(t *testing.T) {
 			t.Logf("wrong number of messages in body %s", string(b))
 			t.FailNow()
 		} else {
+			actual := map[uint]models.Message{}
+			for _, message := range messages["messages"] {
+				actual[message.ID] = message
+			}
 			for i := 1; i <= numberMessage; i++ {
-				if !reflect.DeepEqual(models.Message{
+				expected := models.Message{
 					ID:         uint(i),
 					OwnerID:    1,
 					Text:       fmt.Sprintf("test%d", i),
 					Palindrome: false,
-				}, messages["messages"][i-1]) {
-					t.Logf("the message is not the same %v", messages["messages"][i-1])
+				}
+				if !reflect.DeepEqual(expected, actual[uint(i)]) {
+					t.Logf("the message is not the same expected %v actual %v", expected, actual[uint(i)])
 					t.FailNow()
 				}
 			}
@@ -415,6 +420,91 @@ func TestDeleteMessage(t *testing.T) {
 		if result.RowsAffected != 0 {
 			t.Logf("wrong number of rows in db: %d", result.RowsAffected)
 			t.FailNow()
+		}
+	}
+}
+
+func TestEditMessage(t *testing.T) {
+	app := getApp()
+
+	config, err := models.GetConfig()
+	if err != nil {
+		t.FailNow()
+	}
+
+	setup(t, &config.DBConfig)
+	defer teardown(t, &config.DBConfig)
+
+	resp := addUser(t, app)
+	token := getJwtFromResp(t, resp)
+
+	_ = addMessage(t, app, token, map[string]interface{}{"text": "test"})
+
+	reqBodyBytes, err := json.Marshal(map[string]interface{}{"text": "test update"})
+	if err != nil {
+		t.Log(fmt.Errorf("failed to marshal body %w", err))
+		t.FailNow()
+	}
+
+	req := httptest.NewRequest("POST", "/message/1", bytes.NewReader(reqBodyBytes))
+	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	req.Header.Set(fiber.HeaderAuthorization, "Bearer "+token)
+
+	resp, err = app.Test(req, int(time.Hour.Milliseconds()))
+	if err != nil {
+		t.Logf("failed to test app %s", err)
+		t.FailNow()
+	} else if resp.StatusCode != fiber.StatusOK {
+		t.Logf("bad status: %s", resp.Status)
+		t.FailNow()
+	} else if cType := resp.Header.Get(fiber.HeaderContentType); cType != fiber.MIMEApplicationJSON {
+		t.Logf("bad Content-Type: %s", cType)
+		t.FailNow()
+	} else {
+		var message models.Message
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Logf("failed to read body %s", err)
+			t.FailNow()
+		} else if err = json.Unmarshal(b, &message); err != nil {
+			t.Logf("failed unmarshal body %s %s", string(b), err)
+			t.FailNow()
+		} else {
+			if !reflect.DeepEqual(models.Message{
+				ID:         1,
+				OwnerID:    1,
+				Text:       "test update",
+				Palindrome: false,
+			}, message) {
+				t.Logf("the message is not the same %s", message.Text)
+				t.FailNow()
+			}
+		}
+
+		db, err := utils.Connection(&config.DBConfig)
+		if err != nil {
+			t.Log("failed to connect to db")
+			t.FailNow()
+		}
+
+		var messages []models.Message
+		result := db.Find(&messages)
+		if result.Error != nil {
+			t.Logf("failed to query db: %s", result.Error)
+			t.FailNow()
+		} else if result.RowsAffected != 1 {
+			t.Logf("wrong number of rows in db: %d", result.RowsAffected)
+			t.FailNow()
+		} else {
+			if messages[0].Text != "test update" || messages[0].ID != 1 {
+				t.Logf("the message is not the same %s", messages[0].Text)
+				t.FailNow()
+			}
+
+			if messages[0].Palindrome {
+				t.Logf("the message not palindrome %s", messages[0].Text)
+				t.FailNow()
+			}
 		}
 	}
 }

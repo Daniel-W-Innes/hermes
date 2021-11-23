@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Daniel-W-Innes/hermes/hermesErrors"
 	"github.com/Daniel-W-Innes/hermes/models"
@@ -9,6 +10,12 @@ import (
 	"gorm.io/gorm"
 	"regexp"
 	"testing"
+	"time"
+)
+
+const (
+	getUserStatement = "SELECT * FROM \"users\" WHERE username = $1 AND \"users\".\"deleted_at\" IS NULL LIMIT 1"
+	addUserStatement = "INSERT INTO \"users\" (\"created_at\",\"updated_at\",\"deleted_at\",\"username\",\"password_key\") VALUES ($1,$2,$3,$4,$5) RETURNING \"id\""
 )
 
 func getDBMock() (*sql.DB, sqlmock.Sqlmock, *gorm.DB, error) {
@@ -18,7 +25,7 @@ func getDBMock() (*sql.DB, sqlmock.Sqlmock, *gorm.DB, error) {
 		return nil, nil, nil, err
 	}
 
-	mockedGorm, err := gorm.Open(postgres.New(postgres.Config{Conn: mockDB}), &gorm.Config{PrepareStmt: true})
+	mockedGorm, err := gorm.Open(postgres.New(postgres.Config{Conn: mockDB}), &gorm.Config{PrepareStmt: true, SkipDefaultTransaction: true})
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -26,20 +33,10 @@ func getDBMock() (*sql.DB, sqlmock.Sqlmock, *gorm.DB, error) {
 	return mockDB, mock, mockedGorm, nil
 }
 
-func oracle(mockDB *sql.DB) (*gorm.DB, error) {
-	return gorm.Open(postgres.New(postgres.Config{Conn: mockDB}), &gorm.Config{PrepareStmt: true, DryRun: true})
-}
-
-func setup(t *testing.T) (sqlmock.Sqlmock, *gorm.DB, *gorm.DB, *models.Config) {
-	mockDB, mock, db, err := getDBMock()
+func setup(t *testing.T) (sqlmock.Sqlmock, *gorm.DB, *models.Config) {
+	_, mock, db, err := getDBMock()
 	if err != nil {
 		t.Logf("failed to setup mock db %s\n", err)
-		t.FailNow()
-	}
-
-	oracle, err := oracle(mockDB)
-	if err != nil {
-		t.Logf("failed to setup oracle %s\n", err)
 		t.FailNow()
 	}
 
@@ -48,20 +45,42 @@ func setup(t *testing.T) (sqlmock.Sqlmock, *gorm.DB, *gorm.DB, *models.Config) {
 		t.Logf("failed to get config %s\n", err)
 		t.FailNow()
 	}
-	return mock, db, oracle, config
+	return mock, db, config
+}
+
+type AnyTime struct{}
+
+func (a AnyTime) Match(v driver.Value) bool {
+	_, ok := v.(time.Time)
+	return ok
+}
+
+type PasswordKey struct {
+	Password []byte
+	config   models.PasswordConfig
+}
+
+func (p PasswordKey) Match(v driver.Value) bool {
+	user := models.User{
+		PasswordKey: v.([]byte),
+	}
+	err := user.CheckPassword(&p.config, p.Password)
+	return err == nil
 }
 
 func TestAddUser(t *testing.T) {
-	mock, db, oracle, config := setup(t)
+	mock, db, config := setup(t)
 
 	input := models.UserLogin{
 		Username: "test_username",
 		Password: "password1234",
 	}
 
-	stmt := oracle.Where("username = ?", input.Username).Limit(1).Find(&models.User{}).Statement
+	mock.ExpectPrepare(getUserStatement).ExpectQuery().WithArgs(input.Username).WillReturnRows(sqlmock.NewRows([]string{"username"}))
 
-	mock.ExpectPrepare(stmt.SQL.String()).ExpectQuery().WithArgs(input.Username).WillReturnRows(sqlmock.NewRows([]string{"username"}))
+	mock.ExpectPrepare(addUserStatement).ExpectQuery().WithArgs(
+		AnyTime{}, AnyTime{}, nil, input.Username, PasswordKey{Password: []byte(input.Password), config: config.PasswordConfig},
+	).WillReturnRows(sqlmock.NewRows([]string{"ID"}).AddRow(1))
 
 	output, err := AddUser(db, config, &input)
 	if err != nil {
@@ -80,16 +99,14 @@ func TestAddUser(t *testing.T) {
 }
 
 func TestAddUserUserExists(t *testing.T) {
-	mock, db, oracle, config := setup(t)
+	mock, db, config := setup(t)
 
 	input := models.UserLogin{
 		Username: "test_username",
 		Password: "password1234",
 	}
 
-	stmt := oracle.Where("username = ?", input.Username).Limit(1).Find(&models.User{}).Statement
-
-	mock.ExpectPrepare(stmt.SQL.String()).ExpectQuery().WithArgs(input.Username).WillReturnRows(sqlmock.NewRows([]string{"username"}).AddRow(input.Username))
+	mock.ExpectPrepare(getUserStatement).ExpectQuery().WithArgs(input.Username).WillReturnRows(sqlmock.NewRows([]string{"username"}).AddRow(input.Username))
 
 	output, hermesErr := AddUser(db, config, &input)
 	if hermesErr == nil || output != nil {
@@ -102,16 +119,14 @@ func TestAddUserUserExists(t *testing.T) {
 }
 
 func TestAddUserDBError(t *testing.T) {
-	mock, db, oracle, config := setup(t)
+	mock, db, config := setup(t)
 
 	input := models.UserLogin{
 		Username: "test_username",
 		Password: "password1234",
 	}
 
-	stmt := oracle.Where("username = ?", input.Username).Limit(1).Find(&models.User{}).Statement
-
-	mock.ExpectPrepare(stmt.SQL.String()).ExpectQuery().WithArgs(input.Username).WillReturnRows(sqlmock.NewRows([]string{"username"})).WillReturnError(gorm.ErrUnsupportedDriver)
+	mock.ExpectPrepare(getUserStatement).ExpectQuery().WithArgs(input.Username).WillReturnRows(sqlmock.NewRows([]string{"username"})).WillReturnError(gorm.ErrUnsupportedDriver)
 
 	output, hermesErr := AddUser(db, config, &input)
 	if hermesErr == nil || output != nil {
@@ -122,32 +137,3 @@ func TestAddUserDBError(t *testing.T) {
 		t.Errorf("db expectations were not met %s\n", err)
 	}
 }
-
-//
-//func TestLogin(t *testing.T) {
-//	mockDB, mock, db, err := getDBMock()
-//	if err != nil {
-//		t.FailNow()
-//	}
-//
-//	oracle, err := oracle(mockDB)
-//	if err != nil {
-//		t.FailNow()
-//	}
-//
-//	input := models.UserLogin{
-//		Username: "test_username",
-//		Password: "password1234",
-//	}
-//
-//	stmt := oracle.Where("username = ?", input.Username).Select("password_key", "id").First(&models.User{}).Statement
-//
-//	mock.ExpectQuery(stmt.SQL.String()).WithArgs("test_username").WillReturnRows(sqlmock.NewRows([]string{"password_key", "id"}).AddRow("password1234", 1))
-//
-//	output, err := Login(db, &models.UserLogin{
-//		Username: "test_username",
-//		Password: "password1234",
-//	})
-//
-//	log.Print(output)
-//}
